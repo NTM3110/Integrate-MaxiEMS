@@ -1,0 +1,9 @@
+Bundle-Name: Gurux Net
+Bundle-SymbolicName: io.openems.wrapper.gurux-net
+Bundle-Version: 1.0.28
+
+Include-Resource: @gurux.net-1.0.28.jar
+
+Export-Package: gurux.net.*
+
+-sources: false

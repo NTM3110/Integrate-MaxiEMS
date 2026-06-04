@@ -1,0 +1,1346 @@
+<?xml version="1.0" ?>
+<Objects>
+  <GXDLMSRegister>
+    <SN>480</SN>
+    <LN>1.1.13.5.0.255</LN>
+    <Description>Ch. 1 Sum Li Power factor Last avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>592</SN>
+    <LN>1.1.13.0.0.255</LN>
+    <Description>Ch. 1 Sum Li Power factor Billing period avg. (since last reset) Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>1024</SN>
+    <LN>0.0.97.97.0.255</LN>
+    <Description>Ch. 0 Error object  #1</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>18592</SN>
+    <LN>0.0.96.240.12.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSClock>
+    <SN>11200</SN>
+    <LN>0.0.1.0.0.255</LN>
+    <Description>Ch. 0 Clock object  #1</Description>
+    <Access>133333333</Access>
+    <MethodAccess>111111</MethodAccess>
+    <Time>03/30/2026 12:02:00</Time>
+    <Begin>*/*/2026 12:02:00:707</Begin>
+    <End>*/*/2026 12:02:00:707</End>
+  </GXDLMSClock>
+  <GXDLMSData>
+    <SN>1176</SN>
+    <LN>1.0.0.2.8.255</LN>
+    <Description>Ch. 0 Active firmware signature</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSActivityCalendar>
+    <SN>51000</SN>
+    <LN>0.0.13.0.0.255</LN>
+    <Description>Ch. 0 Activity calendar  #1</Description>
+    <Access>1333333333</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSActivityCalendar>
+  <GXDLMSSpecialDaysTable>
+    <SN>51200</SN>
+    <LN>0.0.11.0.0.255</LN>
+    <Description>Ch. 0 Special days table  #1</Description>
+    <Access>13</Access>
+    <MethodAccess>11</MethodAccess>
+  </GXDLMSSpecialDaysTable>
+  <GXDLMSRegister>
+    <SN>1288</SN>
+    <LN>1.0.0.2.7.255</LN>
+    <Description>Ch. 0 Passive calendar name</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>1384</SN>
+    <LN>0.0.96.2.7.255</LN>
+    <Description>Ch. 0 Date of activation of the passive calendar</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSData>
+    <SN>1480</SN>
+    <LN>0.0.240.19.1.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSIecLocalPortSetup>
+    <SN>1528</SN>
+    <LN>0.0.20.0.0.255</LN>
+    <Description>Ch. 0 IEC optical port setup</Description>
+    <Access>133333333</Access>
+  </GXDLMSIecLocalPortSetup>
+  <GXDLMSIecLocalPortSetup>
+    <SN>1656</SN>
+    <LN>0.0.20.0.1.255</LN>
+    <Description>Ch. 0 IEC electrical port setup</Description>
+    <Access>133333333</Access>
+  </GXDLMSIecLocalPortSetup>
+  <GXDLMSIecHdlcSetup>
+    <SN>1784</SN>
+    <LN>0.0.22.0.0.255</LN>
+    <Description>Ch. 0 IEC HDLC setup</Description>
+    <Access>133333333</Access>
+    <Speed>5</Speed>
+    <WindowSizeTx>1</WindowSizeTx>
+    <WindowSizeRx>1</WindowSizeRx>
+    <MaximumInfoLengthTx>128</MaximumInfoLengthTx>
+    <MaximumInfoLengthRx>128</MaximumInfoLengthRx>
+    <InactivityTimeout>120</InactivityTimeout>
+  </GXDLMSIecHdlcSetup>
+  <GXDLMSIecHdlcSetup>
+    <SN>1888</SN>
+    <LN>0.1.22.0.0.255</LN>
+    <Description>Ch. 1 IEC HDLC setup</Description>
+    <Access>133333333</Access>
+    <Speed>5</Speed>
+    <WindowSizeTx>1</WindowSizeTx>
+    <WindowSizeRx>1</WindowSizeRx>
+    <MaximumInfoLengthTx>128</MaximumInfoLengthTx>
+    <MaximumInfoLengthRx>128</MaximumInfoLengthRx>
+    <InactivityTimeout>120</InactivityTimeout>
+  </GXDLMSIecHdlcSetup>
+  <GXDLMSAssociationShortName>
+    <SN>64000</SN>
+    <LN>0.0.40.0.0.255</LN>
+    <Description>Ch. 0 Current association</Description>
+    <Access>13</Access>
+    <MethodAccess>11111111</MethodAccess>
+  </GXDLMSAssociationShortName>
+  <GXDLMSSapAssignment>
+    <SN>64512</SN>
+    <LN>0.0.41.0.0.255</LN>
+    <Description>Ch. 0 SAP Assignment</Description>
+    <Access>13</Access>
+    <MethodAccess>1</MethodAccess>
+    <SapAssignmentList>
+    </SapAssignmentList>
+  </GXDLMSSapAssignment>
+  <GXDLMSActionSchedule>
+    <SN>50800</SN>
+    <LN>0.0.15.0.0.255</LN>
+    <Description>Ch. 0 End of billing period</Description>
+    <Access>1333</Access>
+    <Type>1</Type>
+  </GXDLMSActionSchedule>
+  <GXDLMSRegister>
+    <SN>2320</SN>
+    <LN>0.0.96.90.2.255</LN>
+    <Description>Ch. 0 Man. spec. abstract object</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>2416</SN>
+    <LN>0.1.96.240.8.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>49400</SN>
+    <LN>0.2.96.240.9.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>49600</SN>
+    <LN>0.2.96.240.8.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSProfileGeneric>
+    <SN>24800</SN>
+    <LN>1.0.99.98.0.255</LN>
+    <Version>1</Version>
+    <Description>Ch. 0 Event log  #1</Description>
+    <Access>13333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <Buffer>
+    </Buffer>
+    <CaptureObjects>
+    </CaptureObjects>
+    <SortMethod>1</SortMethod>
+  </GXDLMSProfileGeneric>
+  <GXDLMSProfileGeneric>
+    <SN>25200</SN>
+    <LN>1.0.99.1.0.255</LN>
+    <Version>1</Version>
+    <Description>Ch. 0 Load profile with recording period 1  #1</Description>
+    <Access>13333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <Buffer>
+    </Buffer>
+    <CaptureObjects>
+    </CaptureObjects>
+    <SortMethod>1</SortMethod>
+  </GXDLMSProfileGeneric>
+  <GXDLMSProfileGeneric>
+    <SN>25600</SN>
+    <LN>0.0.98.1.0.126</LN>
+    <Version>1</Version>
+    <Description>Ch. 0 Data of billing period Scheme 1 #1 Unspecified number of most recent billing periods</Description>
+    <Access>13333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <Buffer>
+    </Buffer>
+    <CaptureObjects>
+    </CaptureObjects>
+    <SortMethod>1</SortMethod>
+  </GXDLMSProfileGeneric>
+  <GXDLMSRegister>
+    <SN>2872</SN>
+    <LN>1.1.1.8.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Time integral 1 Rate 1 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>3048</SN>
+    <LN>1.1.1.8.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Time integral 1 Rate 2 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>3224</SN>
+    <LN>1.1.1.8.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Time integral 1 Rate 3 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>3576</SN>
+    <LN>1.1.2.8.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Time integral 1 Rate 1 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>3752</SN>
+    <LN>1.1.2.8.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Time integral 1 Rate 2 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>3928</SN>
+    <LN>1.1.2.8.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Time integral 1 Rate 3 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>6744</SN>
+    <LN>1.1.1.9.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Time integral 2 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>6920</SN>
+    <LN>1.1.9.9.0.255</LN>
+    <Description>Ch. 1 Sum Li Apparent power+ (QI+QIV) Time integral 2 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>7392</SN>
+    <LN>1.1.2.8.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Time integral 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>7576</SN>
+    <LN>1.1.3.8.0.255</LN>
+    <Description>Ch. 1 Sum Li Reactive power+ (QI+QII) Time integral 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>7744</SN>
+    <LN>1.1.4.8.0.255</LN>
+    <Description>Ch. 1 Sum Li Reactive power- (QIII+QIV) Time integral 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>9688</SN>
+    <LN>1.1.1.8.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Time integral 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>9864</SN>
+    <LN>1.1.9.8.0.255</LN>
+    <Description>Ch. 1 Sum Li Apparent power+ (QI+QIV) Time integral 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSDemandRegister>
+    <SN>13728</SN>
+    <LN>1.1.2.4.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Current avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+    <StartTimeCurrent>03/30/2026 12:02:00</StartTimeCurrent>
+  </GXDLMSDemandRegister>
+  <GXDLMSDemandRegister>
+    <SN>13872</SN>
+    <LN>1.1.3.4.0.255</LN>
+    <Description>Ch. 1 Sum Li Reactive power+ (QI+QII) Current avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+    <StartTimeCurrent>03/30/2026 12:02:00</StartTimeCurrent>
+  </GXDLMSDemandRegister>
+  <GXDLMSDemandRegister>
+    <SN>14016</SN>
+    <LN>1.1.4.4.0.255</LN>
+    <Description>Ch. 1 Sum Li Reactive power- (QIII+QIV) Current avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+    <StartTimeCurrent>03/30/2026 12:02:00</StartTimeCurrent>
+  </GXDLMSDemandRegister>
+  <GXDLMSDemandRegister>
+    <SN>15000</SN>
+    <LN>1.1.1.4.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Current avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+    <StartTimeCurrent>03/30/2026 12:02:00</StartTimeCurrent>
+  </GXDLMSDemandRegister>
+  <GXDLMSDemandRegister>
+    <SN>15144</SN>
+    <LN>1.1.9.4.0.255</LN>
+    <Description>Ch. 1 Sum Li Apparent power+ (QI+QIV) Current avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133333333</Access>
+    <MethodAccess>11</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+    <StartTimeCurrent>03/30/2026 12:02:00</StartTimeCurrent>
+  </GXDLMSDemandRegister>
+  <GXDLMSExtendedRegister>
+    <SN>15896</SN>
+    <LN>1.1.1.6.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Max. 1 Rate 0 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16016</SN>
+    <LN>1.1.2.6.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Max. 1 Rate 0 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16136</SN>
+    <LN>1.1.1.6.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Max. 1 Rate 1 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16256</SN>
+    <LN>1.1.2.6.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Max. 1 Rate 1 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16376</SN>
+    <LN>1.1.1.6.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Max. 1 Rate 2 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16496</SN>
+    <LN>1.1.2.6.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Max. 1 Rate 2 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16616</SN>
+    <LN>1.1.1.6.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Max. 1 Rate 3 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16856</SN>
+    <LN>1.1.2.6.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Max. 1 Rate 3 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>16976</SN>
+    <LN>1.1.1.6.4.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Max. 1 Rate 4 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSExtendedRegister>
+    <SN>17096</SN>
+    <LN>1.1.2.6.4.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Max. 1 Rate 4 (0 is total)</Description>
+    <Access>13333</Access>
+    <MethodAccess>1</MethodAccess>
+    <CaptureTime>03/30/2026 12:02:00</CaptureTime>
+  </GXDLMSExtendedRegister>
+  <GXDLMSRegister>
+    <SN>19296</SN>
+    <LN>1.1.1.2.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Cum. max. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19392</SN>
+    <LN>1.1.2.2.0.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Cum. max. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19488</SN>
+    <LN>1.1.1.2.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Cum. max. 1 Rate 1 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19584</SN>
+    <LN>1.1.2.2.1.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Cum. max. 1 Rate 1 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19680</SN>
+    <LN>1.1.1.2.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Cum. max. 1 Rate 2 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19776</SN>
+    <LN>1.1.2.2.2.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Cum. max. 1 Rate 2 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>19872</SN>
+    <LN>1.1.1.2.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Cum. max. 1 Rate 3 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>21072</SN>
+    <LN>1.1.2.2.3.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Cum. max. 1 Rate 3 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>21168</SN>
+    <LN>1.1.1.2.4.255</LN>
+    <Description>Ch. 1 Sum Li Active power+ (QI+QIV) Cum. max. 1 Rate 4 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>21264</SN>
+    <LN>1.1.2.2.4.255</LN>
+    <Description>Ch. 1 Sum Li Active power- (QII+QIII) Cum. max. 1 Rate 4 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSData>
+    <SN>22704</SN>
+    <LN>1.0.0.0.0.255</LN>
+    <Description>Ch. 0 Electricity ID  #1</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>22760</SN>
+    <LN>1.0.0.0.1.255</LN>
+    <Description>Ch. 0 Electricity ID  #2</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>22816</SN>
+    <LN>1.0.0.0.2.255</LN>
+    <Description>Ch. 0 Electricity ID  #3</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>22872</SN>
+    <LN>1.0.0.0.3.255</LN>
+    <Description>Ch. 0 Electricity ID  #4</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>22928</SN>
+    <LN>0.0.96.1.0.255</LN>
+    <Description>Ch. 0 Device ID 1, manufacturing number</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>22984</SN>
+    <LN>0.0.96.1.1.255</LN>
+    <Description>Ch. 0 Device ID  #2</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSRegister>
+    <SN>23040</SN>
+    <LN>0.0.96.2.1.255</LN>
+    <Description>Ch. 0 Date of last configuration program change</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23136</SN>
+    <LN>0.1.96.2.5.255</LN>
+    <Description>Ch. 1 Date of last calibration</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23232</SN>
+    <LN>0.0.96.2.2.255</LN>
+    <Description>Ch. 0 Date of last time switch program change</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSData>
+    <SN>23328</SN>
+    <LN>0.0.96.240.0.255</LN>
+    <Description>Manufacturer specific</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>65280</SN>
+    <LN>1.0.0.2.0.255</LN>
+    <Description>Ch. 0 Active firmware identifier</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>14800</SN>
+    <LN>1.0.0.2.1.255</LN>
+    <Description>Ch. 0 Parameter record number</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>14400</SN>
+    <LN>0.0.96.90.255.255</LN>
+    <Description>Ch. 0 Man. spec. abstract object</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>64768</SN>
+    <LN>0.0.42.0.0.255</LN>
+    <Description>Ch. 0 COSEM Logical device name</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>23384</SN>
+    <LN>0.0.96.99.8.255</LN>
+    <Description>Ch. 0 Man. spec. abstract object</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>23440</SN>
+    <LN>1.0.0.2.4.255</LN>
+    <Description>Ch. 0 Meter connection diagram ID</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>23496</SN>
+    <LN>0.0.96.90.1.255</LN>
+    <Description>Ch. 0 Man. spec. abstract object</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSData>
+    <SN>23552</SN>
+    <LN>1.0.0.1.2.255</LN>
+    <Description>Ch. 0 Time stamp of the most recent billing period closed (1)</Description>
+    <Access>13</Access>
+  </GXDLMSData>
+  <GXDLMSRegister>
+    <SN>23608</SN>
+    <LN>1.1.0.3.0.255</LN>
+    <Description>Ch. 1 Meter constant Active energy, metrological LED</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23704</SN>
+    <LN>1.1.0.3.1.255</LN>
+    <Description>Ch. 1 Meter constant Reactive energy, metrological LED</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23800</SN>
+    <LN>1.1.0.4.0.255</LN>
+    <Description>Ch. 1 Reading factor for power</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23896</SN>
+    <LN>1.1.0.4.1.255</LN>
+    <Description>Ch. 1 Reading factor for energy</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>23992</SN>
+    <LN>1.1.0.4.2.255</LN>
+    <Description>Ch. 1 Transformer ratio - current (numerator)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>24088</SN>
+    <LN>1.1.0.4.3.255</LN>
+    <Description>Ch. 1 Transformer ratio - voltage (numerator)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>24184</SN>
+    <LN>1.0.0.3.6.255</LN>
+    <Description>Ch. 0 Meter constant Volt-squared hours, metrological LED</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>24280</SN>
+    <LN>1.0.0.3.7.255</LN>
+    <Description>Ch. 0 Meter constant Ampere-squared hours, metrological LED</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>25960</SN>
+    <LN>1.1.72.5.0.255</LN>
+    <Description>Ch. 1 L3 Voltage Last avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>26056</SN>
+    <LN>1.1.52.5.0.255</LN>
+    <Description>Ch. 1 L2 Voltage Last avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>26152</SN>
+    <LN>1.1.32.5.0.255</LN>
+    <Description>Ch. 1 L1 Voltage Last avg. 1 Rate 0 (0 is total)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegisterMonitor>
+    <SN>26248</SN>
+    <LN>1.1.32.35.0.255</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>26544</SN>
+    <LN>1.1.52.35.0.255</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>26672</SN>
+    <LN>1.1.72.35.0.255</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>26800</SN>
+    <LN>1.1.32.31.0.255</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>26928</SN>
+    <LN>1.1.52.31.0.255</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>27056</SN>
+    <LN>1.1.72.31.0.255</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>27184</SN>
+    <LN>1.1.31.35.0.255</LN>
+    <Description>Ch. 1 L1 Current Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>27312</SN>
+    <LN>1.1.51.35.0.255</LN>
+    <Description>Ch. 1 L2 Current Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>27440</SN>
+    <LN>1.1.71.35.0.255</LN>
+    <Description>Ch. 1 L3 Current Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>27568</SN>
+    <LN>1.1.91.35.0.255</LN>
+    <Description>Ch. 1 Lo Current (neutral) Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>30896</SN>
+    <LN>1.1.32.31.0.1</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31024</SN>
+    <LN>1.1.52.31.0.1</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31152</SN>
+    <LN>1.1.72.31.0.1</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31280</SN>
+    <LN>1.1.32.31.0.2</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31408</SN>
+    <LN>1.1.52.31.0.2</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31536</SN>
+    <LN>1.1.72.31.0.2</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31664</SN>
+    <LN>1.1.32.31.0.3</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31792</SN>
+    <LN>1.1.52.31.0.3</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>31920</SN>
+    <LN>1.1.72.31.0.3</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32048</SN>
+    <LN>1.1.32.31.0.4</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32176</SN>
+    <LN>1.1.52.31.0.4</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32304</SN>
+    <LN>1.1.72.31.0.4</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32432</SN>
+    <LN>1.1.32.31.0.5</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32560</SN>
+    <LN>1.1.52.31.0.5</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32688</SN>
+    <LN>1.1.72.31.0.5</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, under limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32816</SN>
+    <LN>1.1.32.35.0.1</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>32944</SN>
+    <LN>1.1.52.35.0.1</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegisterMonitor>
+    <SN>33072</SN>
+    <LN>1.1.72.35.0.1</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value, over limit threshold Harmonic / Distortion factor 0</Description>
+    <Access>1333</Access>
+    <Thresholds>
+    </Thresholds>
+    <MonitoredValue>
+    </MonitoredValue>
+    <Actions>
+    </Actions>
+  </GXDLMSRegisterMonitor>
+  <GXDLMSRegister>
+    <SN>36416</SN>
+    <LN>0.0.96.8.0.255</LN>
+    <Description>Ch. 0 Time of operation, total</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>65024</SN>
+    <LN>0.0.96.2.0.255</LN>
+    <Description>Ch. 0 No. of configuration program changes</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>36608</SN>
+    <LN>1.0.0.1.0.255</LN>
+    <Description>Ch. 0 Billing period counter (1)   #255</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>36896</SN>
+    <LN>0.0.96.7.1.255</LN>
+    <Description>Ch. 0 No. of power failures in phase L1</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>36992</SN>
+    <LN>0.0.96.7.2.255</LN>
+    <Description>Ch. 0 No. of power failures in phase L2</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>37088</SN>
+    <LN>0.0.96.7.3.255</LN>
+    <Description>Ch. 0 No. of power failures in phase L3</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>37184</SN>
+    <LN>0.0.96.7.0.255</LN>
+    <Description>Ch. 0 No. of power failures in all three phases</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>37280</SN>
+    <LN>0.0.96.6.0.255</LN>
+    <Description>Ch. 0 Battery use time counter</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>38280</SN>
+    <LN>0.0.96.4.0.255</LN>
+    <Description>Ch. 0 State of the internal control signals, global</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>38376</SN>
+    <LN>0.0.96.5.0.255</LN>
+    <Description>Ch. 0 Internal operating status, global</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>39656</SN>
+    <LN>1.1.32.7.0.255</LN>
+    <Description>Ch. 1 L1 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>39800</SN>
+    <LN>1.1.52.7.0.255</LN>
+    <Description>Ch. 1 L2 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>39944</SN>
+    <LN>1.1.72.7.0.255</LN>
+    <Description>Ch. 1 L3 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>40088</SN>
+    <LN>1.1.31.7.0.255</LN>
+    <Description>Ch. 1 L1 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>40232</SN>
+    <LN>1.1.51.7.0.255</LN>
+    <Description>Ch. 1 L2 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>40376</SN>
+    <LN>1.1.71.7.0.255</LN>
+    <Description>Ch. 1 L3 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>40520</SN>
+    <LN>1.1.91.7.0.255</LN>
+    <Description>Ch. 1 Lo Current (neutral) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>40664</SN>
+    <LN>1.1.14.7.0.255</LN>
+    <Description>Ch. 1 Supply frequency Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41096</SN>
+    <LN>1.1.81.7.0.255</LN>
+    <Description>Ch. 1 Angle of U(L1) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41240</SN>
+    <LN>1.1.81.7.1.255</LN>
+    <Description>Ch. 1 Angle of U(L2) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41384</SN>
+    <LN>1.1.81.7.2.255</LN>
+    <Description>Ch. 1 Angle of U(L3) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41528</SN>
+    <LN>1.1.81.7.4.255</LN>
+    <Description>Ch. 1 Angle of I(L1) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41672</SN>
+    <LN>1.1.81.7.5.255</LN>
+    <Description>Ch. 1 Angle of I(L2) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41816</SN>
+    <LN>1.1.81.7.6.255</LN>
+    <Description>Ch. 1 Angle of I(L3) - U(L1)</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>41960</SN>
+    <LN>1.1.13.7.0.255</LN>
+    <Description>Ch. 1 Sum Li Power factor Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>42104</SN>
+    <LN>1.1.33.7.0.255</LN>
+    <Description>Ch. 1 L1 Power factor Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>42248</SN>
+    <LN>1.1.53.7.0.255</LN>
+    <Description>Ch. 1 L2 Power factor Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>42392</SN>
+    <LN>1.1.73.7.0.255</LN>
+    <Description>Ch. 1 L3 Power factor Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45128</SN>
+    <LN>1.4.32.7.0.255</LN>
+    <Description>Ch. 4 L1 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45272</SN>
+    <LN>1.4.52.7.0.255</LN>
+    <Description>Ch. 4 L2 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45416</SN>
+    <LN>1.4.72.7.0.255</LN>
+    <Description>Ch. 4 L3 Voltage Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45560</SN>
+    <LN>1.4.31.7.0.255</LN>
+    <Description>Ch. 4 L1 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45704</SN>
+    <LN>1.4.51.7.0.255</LN>
+    <Description>Ch. 4 L2 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45848</SN>
+    <LN>1.4.71.7.0.255</LN>
+    <Description>Ch. 4 L3 Current Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>45992</SN>
+    <LN>1.4.36.7.0.255</LN>
+    <Description>Ch. 4 L1 Active power (abs(QI+QIV)-abs(QII+QIII)) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46136</SN>
+    <LN>1.4.56.7.0.255</LN>
+    <Description>Ch. 4 L2 Active power (abs(QI+QIV)-abs(QI+QIII)) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46280</SN>
+    <LN>1.4.76.7.0.255</LN>
+    <Description>Ch. 4 L3 Active power (abs(QI+QIV)-abs(QI+QIII)) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46424</SN>
+    <LN>1.4.16.7.0.255</LN>
+    <Description>Ch. 4 Sum Li Active power (abs(QI+QIV)-abs(QII+QIII)) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46568</SN>
+    <LN>1.4.151.7.0.255</LN>
+    <Description>Man. specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46712</SN>
+    <LN>1.4.171.7.0.255</LN>
+    <Description>Man. specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>46856</SN>
+    <LN>1.4.191.7.0.255</LN>
+    <Description>Man. specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>47000</SN>
+    <LN>1.4.131.7.0.255</LN>
+    <Description>Man. specific</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>47144</SN>
+    <LN>1.4.91.7.0.255</LN>
+    <Description>Ch. 4 Lo Current (neutral) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>48584</SN>
+    <LN>1.4.9.7.0.255</LN>
+    <Description>Ch. 4 Sum Li Apparent power+ (QI+QIV) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>48728</SN>
+    <LN>1.4.29.7.0.255</LN>
+    <Description>Ch. 4 L1 Apparent power+ (QI+QIV) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>48872</SN>
+    <LN>1.4.49.7.0.255</LN>
+    <Description>Ch. 4 L2 Apparent power+ (QI+QIV) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+  <GXDLMSRegister>
+    <SN>49016</SN>
+    <LN>1.4.69.7.0.255</LN>
+    <Description>Ch. 4 L3 Apparent power+ (QI+QIV) Inst. value</Description>
+    <Access>133</Access>
+    <MethodAccess>1</MethodAccess>
+  </GXDLMSRegister>
+</Objects>

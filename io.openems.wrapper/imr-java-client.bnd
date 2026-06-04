@@ -1,0 +1,15 @@
+Bundle-Name: IMR EDMI Client
+Bundle-SymbolicName: io.openems.wrapper.imr-java-client
+Bundle-Version: 1.0.0
+
+Include-Resource: @lib/imr-java-client-1.0.0.jar
+
+Export-Package: \
+	com.atdigital.imr.*,\
+	com.atdigital.imr.objects.*
+
+Import-Package: \
+	!android.*,\
+	*
+
+-sources: false

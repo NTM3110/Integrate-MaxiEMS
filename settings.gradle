@@ -1,0 +1,51 @@
+pluginManagement {
+	plugins {
+		id 'biz.aQute.bnd.workspace' version "${bnd_version}"
+		id 'biz.aQute.bnd' version "${bnd_version}"
+		id 'com.github.node-gradle.node' version "7.1.0"
+		id 'org.barfuin.gradle.jacocolog' version '3.1.0'
+		id 'org.sonarqube' version '7.2.0.6526'
+	}
+	repositories {
+		maven {
+			name = 'Central Portal Snapshots'
+			url = 'https://central.sonatype.com/repository/maven-snapshots/'
+			content {
+				includeModule('io.openems', 'j2mod')
+			}
+		}
+		maven {
+			name = 'BndRepo'
+			url = uri(bnd_releases)
+			content {
+				includeGroup('biz.aQute.bnd')
+				includeGroup('biz.aQute.bnd.workspace')
+			}
+		}
+		mavenLocal()
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+plugins {
+	id 'biz.aQute.bnd.workspace'
+}
+
+rootProject.name = 'openems'
+
+include ":io.openems.backend.application"
+include ":io.openems.backend.edge.application"
+include ":doc"
+
+rootDir.eachDir { dir ->
+	// Kiểm tra nếu thư mục có chứa file bnd.bnd
+	if (new File(dir, 'bnd.bnd').exists()) {
+		include ":${dir.name}"
+	}
+}
+
+// Nếu bạn có các thư mục con chứa bundle (như 'doc'), hãy thêm thủ công hoặc quét thêm
+if (new File(rootDir, "doc").exists()) {
+	include ":doc"
+}

@@ -1,0 +1,11 @@
+Bundle-Name: Gurux Serial
+Bundle-SymbolicName: io.openems.wrapper.gurux-serial
+Bundle-Version: 1.0.27
+
+Include-Resource: @gurux.serial-1.0.27.jar
+
+Export-Package: \
+    gurux.serial.*,\
+    gurux.io.*
+
+-sources: false

@@ -1,0 +1,9 @@
+Bundle-Name: Gurux Common
+Bundle-SymbolicName: io.openems.wrapper.gurux-common
+Bundle-Version: 1.0.17
+
+Include-Resource: @gurux.common-1.0.17.jar
+
+Export-Package: gurux.common.*
+
+-sources: false

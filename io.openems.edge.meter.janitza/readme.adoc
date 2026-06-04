@@ -1,0 +1,10 @@
+= Janitza Meters
+
+Implemented Meters:
+- UMG 96RM-E
+- UMG 104
+- UMG 511
+- UMG 604
+- UMG 808 (via UMG 604 Master)
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.meter.janitza[Source Code icon:github[]]

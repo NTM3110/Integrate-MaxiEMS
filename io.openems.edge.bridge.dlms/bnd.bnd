@@ -1,0 +1,25 @@
+Bundle-Name: OpenEMS Edge Bridge DLMS
+Bundle-Vendor: FENECON GmbH
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+Export-Package: \
+	io.openems.edge.bridge.dlms.api,\
+	io.openems.edge.bridge.dlms.api.element,\
+	io.openems.edge.bridge.dlms.api.task,\
+	io.openems.edge.bridge.dlms.api.worker
+
+Private-Package: \
+	io.openems.edge.bridge.dlms
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.wrapper.gurux-dlms,\
+	io.openems.wrapper.gurux-common,\
+	io.openems.wrapper.gurux-serial,\
+	io.openems.wrapper.gurux-net,\
+
+-testpath: \
+	${testpath}

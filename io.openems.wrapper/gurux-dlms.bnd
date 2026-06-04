@@ -1,0 +1,9 @@
+Bundle-Name: Gurux DLMS
+Bundle-SymbolicName: io.openems.wrapper.gurux-dlms
+Bundle-Version: 4.0.89
+
+Include-Resource: @gurux.dlms-4.0.89.jar
+
+Export-Package: gurux.dlms.*
+
+-sources: false

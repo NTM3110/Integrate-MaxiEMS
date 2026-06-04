@@ -1,0 +1,22 @@
+Bundle-Name: OpenEMS Edge Bridge EDMI
+Bundle-Vendor: ATEnergy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+Export-Package: \
+	io.openems.edge.bridge.edmi.*,\
+	io.openems.edge.bridge.edmi.api.*
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.timedata.api,\
+	io.openems.edge.timedata.influxdb,\
+	io.openems.shared.influxdb,\
+	io.openems.wrapper.imr-java-client,\
+	io.openems.wrapper.influxdb-client-core,\
+	io.openems.wrapper.influxdb-client-java,\
+
+-testpath: \
+	${testpath}

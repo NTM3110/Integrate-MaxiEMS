@@ -1,0 +1,9 @@
+Bundle-Name: OpenMUC j60870
+Bundle-SymbolicName: io.openems.wrapper.j60870
+Bundle-Version: 1.7.2
+
+Include-Resource: @j60870-1.7.2.jar
+
+Export-Package: org.openmuc.j60870.*
+
+-sources: false
