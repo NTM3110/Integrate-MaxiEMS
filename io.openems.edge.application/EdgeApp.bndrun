@@ -58,6 +58,7 @@
 	bnd.identity;id='io.openems.edge.bridge.onewire',\
 	bnd.identity;id='io.openems.edge.bridge.dlms',\
 	bnd.identity;id='io.openems.edge.bridge.edmi',\
+	bnd.identity;id='io.openems.edge.bridge.iec104',\
 	bnd.identity;id='io.openems.edge.common',\
 	bnd.identity;id='io.openems.edge.controller.api.backend',\
 	bnd.identity;id='io.openems.edge.controller.api.common',\
@@ -265,6 +266,7 @@
 	io.openems.edge.bridge.onewire;version=snapshot,\
 	io.openems.edge.bridge.dlms;version=snapshot,\
 	io.openems.edge.bridge.edmi;version=snapshot,\
+	io.openems.edge.bridge.iec104;version=snapshot,\
 	io.openems.edge.common;version=snapshot,\
 	io.openems.edge.controller.api;version=snapshot,\
 	io.openems.edge.controller.api.backend;version=snapshot,\

@@ -1,0 +1,17 @@
+Bundle-Name: OpenEMS Edge Bridge IEC 104
+Bundle-Vendor: OpenEMS Association e.V.
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.1.${tstamp}
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.wrapper.j60870,\
+
+-exportpackages: \
+	io.openems.edge.bridge.iec104.api,\
+	io.openems.edge.bridge.iec104.api.element
+
+-testpath: \
+	${testpath}
