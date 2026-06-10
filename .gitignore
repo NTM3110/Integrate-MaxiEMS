@@ -237,3 +237,8 @@ io.openems.edge.application/c:/
 
 ### Docker - for Dev UI under WSL ###
 docker-compose.override.yml
+
+# Ignore data, config, and build directories anywhere in the project
+data/
+config/
+build/
