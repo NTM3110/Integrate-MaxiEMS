@@ -2,6 +2,8 @@ package io.openems.edge.bridge.iec104.api.element;
 
 import java.util.function.Consumer;
 
+import org.openmuc.j60870.ASduType;
+
 /**
  * An Iec104Element represents one Information Object Address (IOA) of a
  * IEC 60870-5-104 Slave.
@@ -11,10 +13,12 @@ import java.util.function.Consumer;
 public abstract class Iec104Element<T> {
 
 	private final int ioa;
+	private final ASduType type;
 	private Consumer<T> onUpdateCallback = null;
 
-	public Iec104Element(int ioa) {
+	public Iec104Element(int ioa, ASduType type) {
 		this.ioa = ioa;
+		this.type = type;
 	}
 
 	/**
@@ -24,6 +28,15 @@ public abstract class Iec104Element<T> {
 	 */
 	public int getIoa() {
 		return this.ioa;
+	}
+
+	/**
+	 * Gets the ASDU Type Identification of this Element.
+	 * 
+	 * @return the {@link ASduType}
+	 */
+	public ASduType getType() {
+		return this.type;
 	}
 
 	/**

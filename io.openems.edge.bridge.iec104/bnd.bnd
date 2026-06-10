@@ -7,11 +7,13 @@ Bundle-Version: 1.0.1.${tstamp}
 	${buildpath},\
 	io.openems.common,\
 	io.openems.edge.common,\
-	io.openems.wrapper.j60870,\
+	io.openems.wrapper.j60870,
 
--exportpackages: \
-	io.openems.edge.bridge.iec104.api,\
-	io.openems.edge.bridge.iec104.api.element
+Export-Package: \
+	io.openems.edge.bridge.iec104.api.*,\
+	io.openems.edge.bridge.iec104.*,\
+	io.openems.edge.bridge.iec104.api.element.*,\
+	io.openems.edge.bridge.iec104.api.worker.*
 
 -testpath: \
 	${testpath}

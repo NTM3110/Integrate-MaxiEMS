@@ -1,5 +1,7 @@
 package io.openems.edge.bridge.iec104.api.element;
 
+import org.openmuc.j60870.ASduType;
+
 /**
  * An Iec104NormalizedValueElement represents a Normalized Value (e.g.
  * M_ME_NA_1).
@@ -10,7 +12,7 @@ package io.openems.edge.bridge.iec104.api.element;
 public class Iec104NormalizedValueElement extends Iec104Element<Float> {
 
 	public Iec104NormalizedValueElement(int ioa) {
-		super(ioa);
+		super(ioa, ASduType.M_ME_NA_1);
 	}
 
 }

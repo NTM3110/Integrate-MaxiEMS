@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.3.0" name="Bridge.Iec104" configuration-policy="require" immediate="true" activate="activate" deactivate="deactivate">
+  <property name="id" type="String" value="iec1040"/>
+  <property name="alias" type="String" value=""/>
+  <property name="enabled" type="Boolean" value="true"/>
+  <property name="ip" type="String" value="127.0.0.1"/>
+  <property name="port" type="Integer" value="2404"/>
+  <property name="connectionTimeout" type="Integer" value="20000"/>
+  <property name="cyclicInterrogationInterval" type="Integer" value="60"/>
+  <property name="webconsole.configurationFactory.nameHint" type="String" value="Bridge IEC 104 [{id}]"/>
+  <property name="event.topics" type="String" value="io/openems/edge/cycle/BEFORE_PROCESS_IMAGE"/>
+  <service>
+    <provide interface="io.openems.edge.bridge.iec104.api.Iec104Bridge"/>
+    <provide interface="io.openems.edge.common.component.OpenemsComponent"/>
+    <provide interface="org.osgi.service.event.EventHandler"/>
+    <provide interface="org.openmuc.j60870.ConnectionEventListener"/>
+  </service>
+  <implementation class="io.openems.edge.bridge.iec104.Iec104BridgeImpl"/>
+</scr:component>

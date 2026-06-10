@@ -1,5 +1,7 @@
 package io.openems.edge.bridge.iec104.api.element;
 
+import org.openmuc.j60870.ASduType;
+
 /**
  * An Iec104ScaledValueElement represents a Scaled Value (e.g. M_ME_NB_1).
  * 
@@ -18,7 +20,7 @@ public class Iec104ScaledValueElement extends Iec104Element<Integer> {
 	 * @param scaleFactor the scale factor to apply (e.g. 0.1, 0.01)
 	 */
 	public Iec104ScaledValueElement(int ioa, double scaleFactor) {
-		super(ioa);
+		super(ioa, ASduType.M_ME_NB_1);
 		this.scaleFactor = scaleFactor;
 	}
 

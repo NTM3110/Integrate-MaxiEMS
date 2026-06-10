@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.3.0" name="Meter.IEC104.Test" configuration-policy="require" immediate="true" activate="activate" deactivate="deactivate">
+  <property name="id" type="String" value="iec104-meter0"/>
+  <property name="alias" type="String" value=""/>
+  <property name="enabled" type="Boolean" value="true"/>
+  <property name="commonAddress" type="Integer" value="1"/>
+  <property name="bridge.id" type="String" value="iec1040"/>
+  <property name="webconsole.configurationFactory.nameHint" type="String" value="Meter IEC104 Test [{id}]"/>
+  <service>
+    <provide interface="io.openems.edge.meter.iec104.test.Iec104TestMeter"/>
+    <provide interface="io.openems.edge.common.component.OpenemsComponent"/>
+  </service>
+  <reference name="Iec104Bridge" cardinality="0..1" policy="dynamic" interface="io.openems.edge.bridge.iec104.api.Iec104Bridge" bind="setIec104Bridge" unbind="unsetIec104Bridge" policy-option="greedy"/>
+  <reference name="cm" interface="org.osgi.service.cm.ConfigurationAdmin" field="cm"/>
+  <implementation class="io.openems.edge.meter.iec104.test.Iec104TestMeterImpl"/>
+</scr:component>

@@ -1,5 +1,7 @@
 package io.openems.edge.bridge.iec104.api.element;
 
+import org.openmuc.j60870.ASduType;
+
 /**
  * An Iec104DoublePointElement represents a Double Point value (e.g.
  * M_DP_NA_1).
@@ -11,7 +13,7 @@ package io.openems.edge.bridge.iec104.api.element;
 public class Iec104DoublePointElement extends Iec104Element<Integer> {
 
 	public Iec104DoublePointElement(int ioa) {
-		super(ioa);
+		super(ioa, ASduType.M_DP_NA_1);
 	}
 
 }
