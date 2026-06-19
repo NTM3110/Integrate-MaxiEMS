@@ -242,3 +242,6 @@ docker-compose.override.yml
 data/
 config/
 build/
+
+# Isolated git worktrees
+.worktrees/
