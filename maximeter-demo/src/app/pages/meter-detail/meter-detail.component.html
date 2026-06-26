@@ -1,0 +1,392 @@
+<div class="page-container">
+    <!-- Loading -->
+    <div class="loading-container" *ngIf="isLoading">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading data...</span>
+    </div>
+
+    <!-- Content -->
+    <ng-container *ngIf="!isLoading && meter">
+        <!-- Header -->
+        <div class="detail-header">
+            <div class="header-left">
+                <button mat-icon-button (click)="goBack()" matTooltip="Back">
+                    <mat-icon>arrow_back</mat-icon>
+                </button>
+                <div class="header-info">
+                    <h1>{{ meter.meterPointName }}</h1>
+                    <div class="header-meta">
+                        <span class="meta-item">
+                            <mat-icon>qr_code</mat-icon>
+                            {{ meter.meterPointCode }}
+                        </span>
+                        <span class="meta-item">
+                            <mat-icon>tag</mat-icon>
+                            S/N: {{ meter.serialNumber }}
+                        </span>
+                <span class="status-badge" [class]="meter.connectionStatus">
+                    <span class="status-dot" [class]="meter.connectionStatus"></span>
+                    {{
+                        meter.connectionStatus === 'connected'
+                            ? 'Connected'
+                            : meter.connectionStatus === 'failed'
+                                ? 'Failed'
+                                : 'Not Connected'
+                    }}
+                </span>
+            </div>
+        </div>
+    </div>
+        </div>
+
+        <!-- Meter Info Card -->
+        <mat-card class="info-card">
+            <div class="info-header">
+                <mat-icon>info</mat-icon>
+                <span>Meter Point Information</span>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Meter Point Code - IMEI</span>
+                    <span class="info-value">{{ meter.meterInfo.imei }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Meter Type</span>
+                    <span class="info-value">{{ meter.meterType }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">CT Ratio Primary</span>
+                    <span class="info-value">{{ formatNumber(latestRatios?.['ct_ratio_primary']) }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">CT Ratio Secondary</span>
+                    <span class="info-value">{{ formatNumber(latestRatios?.['ct_ratio_secondary']) }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">VT Ratio Primary</span>
+                    <span class="info-value">{{ formatNumber(latestRatios?.['vt_ratio_primary']) }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">VT Ratio Secondary</span>
+                    <span class="info-value">{{ formatNumber(latestRatios?.['vt_ratio_secondary']) }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Last Updated</span>
+                    <span class="info-value">{{ formatDateTime(latestRatios?.time_stamp) }}</span>
+                </div>
+            </div>
+        </mat-card>
+
+        <!-- Tabs -->
+        <mat-card class="tabs-card">
+            <mat-tab-group [(selectedIndex)]="selectedTabIndex" animationDuration="300ms">
+
+                <!-- Tab 1: Operating Parameters -->
+                <mat-tab label="Operation Metrics">
+                    <div class="tab-content">
+                        <!-- Filters -->
+                        <div class="filter-bar">
+                            <div class="filter-group">
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>From</mat-label>
+                                    <input matInput [matDatepicker]="fromPicker1" [formControl]="fromDate">
+                                    <mat-datepicker-toggle matSuffix [for]="fromPicker1"></mat-datepicker-toggle>
+                                    <mat-datepicker #fromPicker1></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="fromTime">
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>To</mat-label>
+                                    <input matInput [matDatepicker]="toPicker1" [formControl]="toDate">
+                                    <mat-datepicker-toggle matSuffix [for]="toPicker1"></mat-datepicker-toggle>
+                                    <mat-datepicker #toPicker1></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="toTime">
+                                </mat-form-field>
+
+                                <mat-form-field appearance="outline" class="select-field">
+                                    <mat-label>Interval</mat-label>
+                                    <mat-select [formControl]="intervalControl">
+                                        <mat-option *ngFor="let interval of intervals" [value]="interval.value">
+                                            {{ interval.label }}
+                                        </mat-option>
+                                    </mat-select>
+                                </mat-form-field>
+
+                                <mat-form-field appearance="outline" class="select-field wide">
+                                    <mat-label>Select Columns</mat-label>
+                                    <mat-select [formControl]="columnControl" multiple
+                                        (selectionChange)="onOperatingColumnsChange()">
+                                        <mat-option *ngFor="let col of allColumns" [value]="col.column_name"
+                                            [disabled]="isOperationColumnDisabled(col.column_name)">
+                                            {{ col.description }} <span *ngIf="col.unit">({{ col.unit }})</span>
+                                        </mat-option>
+                                    </mat-select>
+                                </mat-form-field>
+                            </div>
+                            <div class="filter-actions">
+                                <button mat-raised-button color="primary" class="apply-button"
+                                    (click)="applyFilter()" [disabled]="isLoadingOperatingData">
+                                    <mat-spinner *ngIf="isLoadingOperatingData" class="button-spinner" diameter="18"></mat-spinner>
+                                    <mat-icon *ngIf="!isLoadingOperatingData">search</mat-icon>
+                                    {{ isLoadingOperatingData ? 'Loading' : 'Apply' }}
+                                </button>
+                                <button mat-raised-button color="accent" (click)="exportExcel('operating')">
+                                    <mat-icon>file_download</mat-icon>
+                                    Export Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chart -->
+                        <div class="chart-section">
+                            <div class="section-header">
+                                <mat-icon>show_chart</mat-icon>
+                                <span>Operating Parameters Chart</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas baseChart [type]="operatingChartType" [data]="operatingChartData"
+                                    [options]="operatingChartOptions">
+                                </canvas>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="table-section">
+                            <div class="table-wrapper">
+                                <table mat-table [dataSource]="apiDataPoints" class="data-table">
+                                    <!-- Dynamic Columns -->
+                                    <ng-container *ngFor="let colName of operatingColumns">
+                                        <!-- Timestamp Column -->
+                                        <ng-container *ngIf="colName === 'timestamp'" matColumnDef="timestamp">
+                                            <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+                                            <td mat-cell *matCellDef="let row">{{ formatDateTime(row.time_stamp) }}</td>
+                                        </ng-container>
+
+                                        <!-- Regular Columns -->
+                                        <ng-container *ngIf="colName !== 'timestamp'" [matColumnDef]="colName">
+                                            <th mat-header-cell *matHeaderCellDef>
+                                                <div class="column-header" *ngIf="getColumnInfo(colName) as info">
+                                                    {{ info.description }}
+                                                    <span class="unit" *ngIf="info.unit">({{ info.unit }})</span>
+                                                </div>
+                                            </th>
+                                            <td mat-cell *matCellDef="let row">
+                                                {{ formatNumber(row[colName], 2) }}
+                                            </td>
+                                        </ng-container>
+                                    </ng-container>
+
+                                    <tr mat-header-row *matHeaderRowDef="operatingColumns; sticky: true"></tr>
+                                    <tr mat-row *matRowDef="let row; columns: operatingColumns"></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </mat-tab>
+
+                <!-- Tab 2: Load Profile 30' -->
+                <mat-tab label="Power Load Profile">
+                    <div class="tab-content">
+                        <!-- Filters -->
+                        <div class="filter-bar">
+                            <div class="filter-group">
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>From</mat-label>
+                                    <input matInput [matDatepicker]="fromPicker2" [formControl]="fromDate">
+                                    <mat-datepicker-toggle matSuffix [for]="fromPicker2"></mat-datepicker-toggle>
+                                    <mat-datepicker #fromPicker2></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="fromTime">
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>To</mat-label>
+                                    <input matInput [matDatepicker]="toPicker2" [formControl]="toDate">
+                                    <mat-datepicker-toggle matSuffix [for]="toPicker2"></mat-datepicker-toggle>
+                                    <mat-datepicker #toPicker2></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="toTime">
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="select-field">
+                                    <mat-label>Survey</mat-label>
+                                    <mat-select [formControl]="loadSurveyControl">
+                                        <mat-option *ngFor="let survey of loadSurveyOptions" [value]="survey">
+                                            {{ survey }}
+                                        </mat-option>
+                                    </mat-select>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="select-field wide">
+                                    <mat-label>Select Columns</mat-label>
+                                    <mat-select [formControl]="loadColumnControl" multiple
+                                        (selectionChange)="onLoadProfileColumnsChange()">
+                                        <mat-option *ngFor="let field of loadProfileFields" [value]="field">
+                                            {{ field }}
+                                        </mat-option>
+                                    </mat-select>
+                                </mat-form-field>
+                            </div>
+                            <div class="filter-actions">
+                                <button mat-raised-button color="primary" class="apply-button"
+                                    (click)="applyLoadProfileFilter()" [disabled]="isLoadingProfileData">
+                                    <mat-spinner *ngIf="isLoadingProfileData" class="button-spinner" diameter="18"></mat-spinner>
+                                    <mat-icon *ngIf="!isLoadingProfileData">search</mat-icon>
+                                    {{ isLoadingProfileData ? 'Loading' : 'Apply' }}
+                                </button>
+                                <button mat-raised-button color="accent" (click)="exportExcel('load')">
+                                    <mat-icon>file_download</mat-icon>
+                                    Export Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chart -->
+                        <div class="chart-section">
+                            <div class="section-header">
+                                <mat-icon>bar_chart</mat-icon>
+                                <span>Load survey ({{ loadSurveyLabel }}) {{ loadSamplingIntervalLabel }} sampling
+                                    interval</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas baseChart [type]="loadChartType" [data]="loadChartData"
+                                    [options]="loadChartOptions">
+                                </canvas>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="table-section">
+                            <div class="table-wrapper">
+                                <table mat-table [dataSource]="loadProfileDataPoints" class="data-table">
+                                    <ng-container *ngFor="let colName of loadColumns">
+                                        <ng-container *ngIf="colName === 'timestamp'" matColumnDef="timestamp">
+                                            <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+                                            <td mat-cell *matCellDef="let row">{{ formatDateTime(row.time_stamp) }}</td>
+                                        </ng-container>
+
+                                        <ng-container *ngIf="colName !== 'timestamp'" [matColumnDef]="colName">
+                                            <th mat-header-cell *matHeaderCellDef>
+                                                <div class="column-header">
+                                                    {{ colName }}
+                                                </div>
+                                            </th>
+                                            <td mat-cell *matCellDef="let row">
+                                                {{ formatNumber(row[colName], 2) }}
+                                            </td>
+                                        </ng-container>
+                                    </ng-container>
+
+                                    <tr mat-header-row *matHeaderRowDef="loadColumns; sticky: true"></tr>
+                                    <tr mat-row *matRowDef="let row; columns: loadColumns"></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </mat-tab>
+
+                <!-- Tab 3: Finalized Readings -->
+                <mat-tab label="Finalized Readings">
+                    <div class="tab-content">
+                        <!-- Filters -->
+                        <div class="filter-bar">
+                            <div class="filter-group">
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>From</mat-label>
+                                    <input matInput [matDatepicker]="fromPicker4" [formControl]="fromDate">
+                                    <mat-datepicker-toggle matSuffix [for]="fromPicker4"></mat-datepicker-toggle>
+                                    <mat-datepicker #fromPicker4></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="fromTime">
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="date-field">
+                                    <mat-label>To</mat-label>
+                                    <input matInput [matDatepicker]="toPicker4" [formControl]="toDate">
+                                    <mat-datepicker-toggle matSuffix [for]="toPicker4"></mat-datepicker-toggle>
+                                    <mat-datepicker #toPicker4></mat-datepicker>
+                                </mat-form-field>
+                                <mat-form-field appearance="outline" class="time-field">
+                                    <mat-label>Time</mat-label>
+                                    <input matInput type="text" inputmode="numeric" maxlength="5" placeholder="00:00"
+                                        [formControl]="toTime">
+                                </mat-form-field>
+                            </div>
+                            <div class="filter-actions">
+                                <button mat-raised-button color="primary" class="apply-button"
+                                    (click)="applyFilter()" [disabled]="isLoadingOperatingData">
+                                    <mat-spinner *ngIf="isLoadingOperatingData" class="button-spinner" diameter="18"></mat-spinner>
+                                    <mat-icon *ngIf="!isLoadingOperatingData">search</mat-icon>
+                                    {{ isLoadingOperatingData ? 'Loading' : 'Apply' }}
+                                </button>
+                                <button mat-raised-button color="accent" (click)="exportExcel('finalized')">
+                                    <mat-icon>file_download</mat-icon>
+                                    Export Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="table-section">
+                            <div class="table-wrapper">
+                                <table mat-table [dataSource]="apiDataPoints" class="data-table">
+                                    <ng-container matColumnDef="timestamp">
+                                        <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+                                        <td mat-cell *matCellDef="let row">{{ formatDateTime(row.time_stamp) }}</td>
+                                    </ng-container>
+
+                                    <ng-container matColumnDef="total_import_kwh">
+                                        <th mat-header-cell *matHeaderCellDef>Total Import (kWh)</th>
+                                        <td mat-cell *matCellDef="let row">{{ formatNumber(row.total_import_kwh, 2) }}
+                                        </td>
+                                    </ng-container>
+
+                                    <ng-container matColumnDef="total_export_kwh">
+                                        <th mat-header-cell *matHeaderCellDef>Total Export (kWh)</th>
+                                        <td mat-cell *matCellDef="let row">{{ formatNumber(row.total_export_kwh, 2) }}
+                                        </td>
+                                    </ng-container>
+
+                                    <ng-container matColumnDef="p_total">
+                                        <th mat-header-cell *matHeaderCellDef>P Total (W)</th>
+                                        <td mat-cell *matCellDef="let row">{{ formatNumber(row.p_total, 2) }}</td>
+                                    </ng-container>
+
+                                    <ng-container matColumnDef="q_total">
+                                        <th mat-header-cell *matHeaderCellDef>Q Total (var)</th>
+                                        <td mat-cell *matCellDef="let row">{{ formatNumber(row.q_total, 2) }}</td>
+                                    </ng-container>
+
+                                    <tr mat-header-row *matHeaderRowDef="finalizedColumns"></tr>
+                                    <tr mat-row *matRowDef="let row; columns: finalizedColumns"></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </mat-tab>
+            </mat-tab-group>
+        </mat-card>
+    </ng-container>
+
+    <!-- Not Found -->
+    <div class="not-found" *ngIf="!isLoading && !meter">
+        <mat-icon>error_outline</mat-icon>
+        <h2>Meter Not Found</h2>
+        <p>The meter you are looking for does not exist or has been deleted.</p>
+        <button mat-raised-button color="primary" (click)="goBack()">
+            Back to Dashboard
+        </button>
+    </div>
+</div>

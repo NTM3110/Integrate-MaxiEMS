@@ -10,6 +10,7 @@ import com.influxdb.client.write.Point;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import com.google.gson.JsonArray;
 
@@ -49,7 +50,21 @@ public interface EdmiBridge extends OpenemsComponent {
 
 	void unregisterEnergyMeter(String meterId);
 
-	void processProfileTimestamp(Instant timestamp);
+	/**
+	 * Gets the count of registered energy meters by role and source type.
+	 * 
+	 * @param role the meter role (e.g., SOURCE, SELF_USE, MAIN, BACKUP)
+	 * @param sourceType the source type (e.g., BESS, RTS, NONE) or null to count all sources
+	 * @return the number of registered meters matching the criteria
+	 */
+	int getEnergyMeterCount(String role, String sourceType);
+
+	/**
+	 * Gets all registered energy meters.
+	 * 
+	 * @return map of meterId to EdmiEnergyMeter
+	 */
+	Map<String, EdmiEnergyMeter> getEnergyMeters();
 
 	/**
 	 * Sends a request read profile and get record.
@@ -85,6 +100,16 @@ public interface EdmiBridge extends OpenemsComponent {
 	void writeToInflux(Point point);
 
 	/**
+	 * Writes a Point to InfluxDB synchronously (blocking until written).
+	 * 
+	 * <p>Use this method when you need to ensure the data is immediately
+	 * available for reading back from InfluxDB.
+	 * 
+	 * @param point the InfluxDB Point
+	 */
+	void writeToInfluxSync(Point point);
+
+	/**
 	 * Queries historical billing values from InfluxDB.
 	 *
 	 * @param meterId the meter id tag
@@ -109,6 +134,4 @@ public interface EdmiBridge extends OpenemsComponent {
 	 */
 	JsonArray queryProfileValuesFromInflux(String meterId, Instant start, Instant end, List<String> fields)
 			throws Exception;
-
-	JsonArray querySeparatedEnergyFromInflux(Instant start, Instant end, List<String> fields) throws Exception;
 }

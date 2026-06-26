@@ -6,8 +6,8 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 enum EnergyMeterRole {
 	SOURCE,
 	SELF_USE,
-	GRID_POINT,
-	INTERCONNECT
+	MAIN,
+	BACKUP
 }
 
 enum EnergySourceType {
@@ -42,11 +42,30 @@ enum EnergySourceType {
 	@AttributeDefinition(name = "EDMI Bridge-ID", description = "ID of the EDMI Bridge")
 	String bridge_id() default "edmi0";
 
-	@AttributeDefinition(name = "Energy meter role", description = "SOURCE, SELF_USE, GRID_POINT or INTERCONNECT for energy separation")
+	@AttributeDefinition(name = "Energy meter role", description = "SOURCE, SELF_USE, MAIN or BACKUP for energy separation")
 	EnergyMeterRole energyRole() default EnergyMeterRole.SOURCE;
 
 	@AttributeDefinition(name = "Energy source type", description = "BESS or RTS for SOURCE meters; NONE for other roles")
 	EnergySourceType energySourceType() default EnergySourceType.NONE;
+
+	// PostgreSQL sync settings
+	@AttributeDefinition(name = "Enable PostgreSQL Sync", description = "Sync meter configuration to PostgreSQL")
+	boolean enablePostgreSqlSync() default false;
+
+	@AttributeDefinition(name = "PostgreSQL Host", description = "PostgreSQL host for meter sync")
+	String postgreSqlHost() default "localhost";
+
+	@AttributeDefinition(name = "PostgreSQL Port", description = "PostgreSQL port for meter sync")
+	int postgreSqlPort() default 5432;
+
+	@AttributeDefinition(name = "PostgreSQL Database", description = "PostgreSQL database for meter sync")
+	String postgreSqlDatabase() default "energy_reports";
+
+	@AttributeDefinition(name = "PostgreSQL User", description = "PostgreSQL username for meter sync")
+	String postgreSqlUser() default "openems";
+
+	@AttributeDefinition(name = "PostgreSQL Password", description = "PostgreSQL password for meter sync")
+	String postgreSqlPassword() default "";
 
 	String webconsole_configurationFactory_nameHint() default "Meter EDMI [{id}]";
 }

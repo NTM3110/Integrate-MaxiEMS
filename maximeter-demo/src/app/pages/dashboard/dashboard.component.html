@@ -1,0 +1,208 @@
+<div class="page-container">
+    <div class="page-header">
+        <h1>Dashboard</h1>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <mat-card class="stat-card total">
+            <div class="stat-icon">
+                <mat-icon>electric_meter</mat-icon>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats?.totalMeters || 0 }}</div>
+                <div class="stat-label">Total Meters</div>
+            </div>
+        </mat-card>
+
+        <mat-card class="stat-card online">
+            <div class="stat-icon">
+                <mat-icon>wifi</mat-icon>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats?.onlineMeters || 0 }}</div>
+                <div class="stat-label">Connected</div>
+            </div>
+        </mat-card>
+
+        <mat-card class="stat-card offline">
+            <div class="stat-icon">
+                <mat-icon>wifi_off</mat-icon>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats?.offlineMeters || 0 }}</div>
+                <div class="stat-label">Disconnected</div>
+            </div>
+        </mat-card>
+
+        <mat-card class="stat-card reading">
+            <div class="stat-icon">
+                <mat-icon>sync</mat-icon>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats?.readingMeters || 0 }}</div>
+                <div class="stat-label">Reading Data</div>
+            </div>
+        </mat-card>
+    </div>
+
+    <!-- Meter Table -->
+    <mat-card class="health-card" [class.collapsed]="isHealthPanelCollapsed">
+        <div class="health-header">
+            <div>
+                <h2>Meter Status Panel</h2>
+                <p *ngIf="loopStatus.isRunning">Live status from streaming read loop</p>
+                <p *ngIf="!loopStatus.isRunning">Start a reading loop to view live status.</p>
+            </div>
+            <div class="health-header-actions">
+                <span class="health-pill" [class.running]="loopStatus.isRunning">
+                    {{ loopStatus.isRunning ? 'Streaming' : 'Idle' }}
+                </span>
+                <button mat-icon-button type="button" class="health-toggle-button" (click)="toggleHealthPanel()"
+                    [attr.aria-label]="isHealthPanelCollapsed ? 'Expand meter status panel' : 'Minimize meter status panel'"
+                    [matTooltip]="isHealthPanelCollapsed ? 'Expand panel' : 'Minimize panel'">
+                    <mat-icon>{{ isHealthPanelCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up' }}</mat-icon>
+                </button>
+            </div>
+        </div>
+
+        <ng-container *ngIf="!isHealthPanelCollapsed">
+        <div *ngIf="loopStatus.isRunning && healthMeters.length; else healthEmpty">
+            <div class="health-tabs">
+                <div class="health-tab" *ngFor="let meter of healthMeters"
+                    [class.ok]="meter.connectionStatus === 'connected'"
+                    [class.bad]="meter.connectionStatus !== 'connected'">
+                    <div class="health-tab-header">
+                        <span class="health-tab-title">
+                            ID {{ meter.id }} • {{ meter.serialNumber }} • {{ meter.name }}
+                        </span>
+                        <span class="health-tab-status" [class.ok]="meter.connectionStatus === 'connected'"
+                            [class.bad]="meter.connectionStatus !== 'connected'">
+                            {{ meter.statusLabel }}
+                        </span>
+                    </div>
+                    <div class="health-grid">
+                        <div class="health-item">
+                            <span class="health-label">Status</span>
+                            <span class="health-value" [class.ok]="meter.connectionStatus === 'connected'"
+                                [class.bad]="meter.connectionStatus !== 'connected'">
+                                {{ meter.statusLabel }}
+                            </span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-label">Raw Status</span>
+                            <span class="health-value">{{ meter.rawStatus }}</span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-label">Last Update</span>
+                            <span class="health-value">{{ meter.lastUpdated }}</span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-label">Last Slot</span>
+                            <span class="health-value">{{ meter.lastSlotTs }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ng-template #healthEmpty>
+            <div class="health-empty">
+                <mat-icon>monitor_heart</mat-icon>
+                <span>No streaming status yet.</span>
+            </div>
+        </ng-template>
+        </ng-container>
+    </mat-card>
+
+    <mat-card class="meter-table-card">
+        <div class="table-header">
+            <h2>Meter List</h2>
+        </div>
+
+        <div class="table-container">
+            <div class="table-loading" *ngIf="isLoading">
+                <mat-spinner diameter="40"></mat-spinner>
+            </div>
+
+            <table mat-table [dataSource]="meters" class="meter-table">
+                <!-- Serial Number Column -->
+                <ng-container matColumnDef="serialNumber">
+                    <th mat-header-cell *matHeaderCellDef><span class="header-wrap">Serial<br>Number</span></th>
+                    <td mat-cell *matCellDef="let meter" class="sn-cell">{{ meter.serialNumber }}</td>
+                </ng-container>
+
+                <!-- Meter Point Name Column -->
+                <ng-container matColumnDef="meterPointName">
+                    <th mat-header-cell *matHeaderCellDef><span class="header-wrap">Meter<br>Name</span></th>
+                    <td mat-cell *matCellDef="let meter" class="name-cell">{{ meter.meterPointName }}</td>
+                </ng-container>
+
+                <!-- Meter Point Code Column -->
+                <ng-container matColumnDef="meterPointCode">
+                    <th mat-header-cell *matHeaderCellDef><span class="header-wrap">Point<br>Code</span></th>
+                    <td mat-cell *matCellDef="let meter">{{ meter.meterPointCode }}</td>
+                </ng-container>
+
+                <!-- Outstation Number Column -->
+                <ng-container matColumnDef="outstationNumber">
+                    <th mat-header-cell *matHeaderCellDef><span class="header-wrap">Outstation<br>Number</span></th>
+                    <td mat-cell *matCellDef="let meter">{{ meter.outstationNumber }}</td>
+                </ng-container>
+
+                <!-- Type Column -->
+                <ng-container matColumnDef="meterKind">
+                    <th mat-header-cell *matHeaderCellDef>Type</th>
+                    <td mat-cell *matCellDef="let meter">{{ meter.meterKind }}</td>
+                </ng-container>
+
+                <!-- Meter Type Column -->
+                <ng-container matColumnDef="meterType">
+                    <th mat-header-cell *matHeaderCellDef>Model</th>
+                    <td mat-cell *matCellDef="let meter">{{ meter.meterType }}</td>
+                </ng-container>
+
+
+                <!-- Role Column -->
+                <ng-container matColumnDef="role">
+                    <th mat-header-cell *matHeaderCellDef>Role</th>
+                    <td mat-cell *matCellDef="let meter">{{ getRoleLabel(meter.roleId) }}</td>
+                </ng-container>
+
+                <!-- Source Column -->
+                <ng-container matColumnDef="source">
+                    <th mat-header-cell *matHeaderCellDef>Source</th>
+                    <td mat-cell *matCellDef="let meter">{{ getSourceLabel(meter.sourceId) }}</td>
+                </ng-container>
+                <!-- Connection Status Column -->
+                <ng-container matColumnDef="connectionStatus">
+                    <th mat-header-cell *matHeaderCellDef><span class="header-wrap">Connection<br>Status</span></th>
+                    <td mat-cell *matCellDef="let meter">
+                        <span class="status-badge" [class.status-connected]="meter.connectionStatus === 'connected'"
+                            [class.status-failed]="meter.connectionStatus === 'failed'"
+                            [class.status-not-connected]="meter.connectionStatus === 'not_connected'">
+                            <span class="status-dot" [class]="meter.connectionStatus"></span>
+                            {{
+                                meter.connectionStatus === 'connected'
+                                    ? 'Connected'
+                                    : meter.connectionStatus === 'failed'
+                                        ? 'Failed'
+                                        : 'Not Connected'
+                            }}
+                        </span>
+                    </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns" class="meter-row clickable"
+                    (click)="viewMeterDetail(row)"></tr>
+            </table>
+
+            <!-- No Data -->
+            <div class="no-data" *ngIf="!isLoading && meters.length === 0">
+                <mat-icon>inbox</mat-icon>
+                <span>No meters found</span>
+            </div>
+        </div>
+    </mat-card>
+</div>

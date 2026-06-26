@@ -1,0 +1,43 @@
+<div class="license-container">
+    <mat-card class="license-card">
+        <div class="license-header">
+            <img src="assets/images/MAXiMeter_Logo.png" alt="MAXiMeter Logo" class="license-logo"/>
+            <h1>License Activation</h1>
+            <p *ngIf="projectId">Project ID: {{ projectId }}</p>
+        </div>
+
+        <mat-card-content>
+            <form [formGroup]="activationForm" (ngSubmit)="activate()">
+                <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>License key</mat-label>
+                    <input matInput formControlName="licenseKey" autocomplete="off"/>
+                    <mat-icon matPrefix>vpn_key</mat-icon>
+                    <mat-error *ngIf="activationForm.get('licenseKey')?.hasError('required')">
+                        License key is required
+                    </mat-error>
+                </mat-form-field>
+
+                <div class="status-message" *ngIf="statusText">
+                    <mat-icon>check_circle</mat-icon>
+                    {{ statusText }}
+                </div>
+
+                <div class="error-message" *ngIf="errorMessage">
+                    <mat-icon>error</mat-icon>
+                    {{ errorMessage }}
+                </div>
+
+                <button
+                    mat-raised-button
+                    color="primary"
+                    type="submit"
+                    class="activate-button"
+                    [disabled]="isLoading"
+                >
+                    <mat-spinner *ngIf="isLoading" diameter="20"></mat-spinner>
+                    <span *ngIf="!isLoading">Activate</span>
+                </button>
+            </form>
+        </mat-card-content>
+    </mat-card>
+</div>

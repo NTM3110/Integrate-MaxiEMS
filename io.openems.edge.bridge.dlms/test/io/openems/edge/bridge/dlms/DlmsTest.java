@@ -1,5 +1,6 @@
 package io.openems.edge.bridge.dlms;
 
+import gurux.common.IGXMedia;
 import org.junit.Test;
 import gurux.dlms.GXDLMSClient;
 import gurux.dlms.objects.GXDLMSObject;
@@ -44,7 +45,7 @@ public class DlmsTest {
             "-l", "1",
             "-r", "sn",
             "-o", "meter_cache.xml"
-            // "-t", "Verbos.e"
+            // "-t", "Verbose"
         };
 
         System.out.println("Parsing parameters...");
@@ -53,7 +54,7 @@ public class DlmsTest {
         }
 
         GXSerial serial = (GXSerial) settings.media;
-        GXDLMSReader reader = new GXDLMSReader(settings.client, serial, settings.trace, null);
+        GXDLMSReader reader = new GXDLMSReader(settings.client, (IGXMedia) serial, settings.trace, null);
 
         try {
             System.out.println("Connecting to DLMS Meter on " + serial.getPortName() + "...");

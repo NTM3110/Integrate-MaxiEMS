@@ -16,13 +16,17 @@ import io.openems.edge.bridge.iec104.api.AbstractOpenemsIec104Component;
 import io.openems.edge.bridge.iec104.api.Iec104Bridge;
 import io.openems.edge.bridge.iec104.api.Iec104Component;
 import io.openems.edge.bridge.iec104.api.Iec104Protocol;
+import io.openems.edge.bridge.iec104.api.element.Iec104BitstringElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104DoublePointElement;
+import io.openems.edge.bridge.iec104.api.element.Iec104DoublePointTimeElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104FloatElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104NormalizedValueElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104ScaledValueElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104SinglePointElement;
+import io.openems.edge.bridge.iec104.api.element.Iec104SinglePointTimeElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104StepPositionElement;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.jsonapi.ComponentJsonApi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,11 +39,12 @@ import org.slf4j.LoggerFactory;
 @Designate(ocd = Config.class, factory = true)
 @Component(//
 		name = "Meter.IEC104.Test", //
+		service = { Iec104TestMeter.class, OpenemsComponent.class, ComponentJsonApi.class }, //
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
 public class Iec104TestMeterImpl extends AbstractOpenemsIec104Component
-		implements Iec104TestMeter, OpenemsComponent {
+		implements Iec104TestMeter, OpenemsComponent, ComponentJsonApi {
 
 	private final Logger log = LoggerFactory.getLogger(Iec104TestMeterImpl.class);
 
@@ -115,8 +120,32 @@ public class Iec104TestMeterImpl extends AbstractOpenemsIec104Component
 				// IOA 1011: Scaled Value (M_ME_NB_1, Type ID 11)
 				m(Iec104TestMeter.ChannelId.IOA_1011_SCALED_VALUE, new Iec104ScaledValueElement(1011)),
 				//
-				// IOA 1013: Short Float (M_ME_NC_1, Type ID 13)
-				m(Iec104TestMeter.ChannelId.IOA_1013_FLOAT_VALUE, new Iec104FloatElement(1013))//
+			// IOA 1013: Short Float (M_ME_NC_1, Type ID 13)
+			m(Iec104TestMeter.ChannelId.IOA_1013_FLOAT_VALUE, new Iec104FloatElement(1013)),
+			//
+			// IOA 1030: Single Point with Time Tag (M_SP_TB_1, Type ID 30)
+			m(Iec104TestMeter.ChannelId.IOA_1030_SINGLE_POINT_TIME, new Iec104SinglePointTimeElement(1030)),
+			//
+			// IOA 1031: Double Point with Time Tag (M_DP_TB_1, Type ID 31)
+			m(Iec104TestMeter.ChannelId.IOA_1031_DOUBLE_POINT_TIME, new Iec104DoublePointTimeElement(1031)),
+			//
+				// IOA 2045: Single Command (C_SC_NA_1, Type ID 45)
+				m(Iec104TestMeter.ChannelId.IOA_2045_SINGLE_COMMAND, new Iec104SinglePointElement(2045)),
+				//
+				// IOA 2046: Double Command (C_DC_NA_1, Type ID 46)
+				m(Iec104TestMeter.ChannelId.IOA_2046_DOUBLE_COMMAND, new Iec104DoublePointElement(2046)),
+				//
+				// IOA 2047: Regulating Step Command (C_RC_NA_1, Type ID 47)
+				m(Iec104TestMeter.ChannelId.IOA_2047_REGULATING_STEP, new Iec104StepPositionElement(2047)),
+				//
+				// IOA 2048: Normalized Setpoint Command (C_SE_NA_1, Type ID 48)
+				m(Iec104TestMeter.ChannelId.IOA_2048_NORMALIZED_SETPOINT, new Iec104NormalizedValueElement(2048)),
+				//
+				// IOA 2050: Float Setpoint Command (C_SE_NC_1, Type ID 50)
+				m(Iec104TestMeter.ChannelId.IOA_2050_FLOAT_SETPOINT, new Iec104FloatElement(2050)),
+				//
+				// IOA 2051: Bitstring Command (C_BO_NA_1, Type ID 51)
+				m(Iec104TestMeter.ChannelId.IOA_2051_BITSTRING_COMMAND, new Iec104BitstringElement(2051))//
 		);
 	}
 

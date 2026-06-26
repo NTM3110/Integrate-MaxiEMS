@@ -19,7 +19,7 @@ public class EdmiClientTest {
     public void testImports() {
         // Simple test to ensure the IMR EDMI wrapper library is successfully loaded
         try {
-            MeterClient client = new MeterClient("COM2", 9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+            MeterClient client = new MeterClient("COM11", 9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
             System.out.println("IMR EDMI Client initialized successfully!");
             
             // If your MeterClient has getters, you can test them here, like:
@@ -37,7 +37,7 @@ public class EdmiClientTest {
             ImrCoreLib.INSTANCE.Init();
             System.out.println("IMR.Core initialized.");
 
-            MeterClient client = new MeterClient("COM2", 9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+            MeterClient client = new MeterClient("COM11", 9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
             client.connect();
 
             if (!client.login("EDMI", "IMDEIMDE", 251308613)) {
@@ -54,8 +54,8 @@ public class EdmiClientTest {
             short survey = 0x0305;
             // Query from 2026-01-01 to open-ended (null = "to end of available data")
             // This returns all records the DLL has buffered, including today's intervals.
-            EdmiDateTime.ByValue from = new EdmiDateTime.ByValue(26, 6, 2, 0, 0, 0);
-            EdmiDateTime.ByValue to = new EdmiDateTime.ByValue(26, 6, 3, 0, 0, 0);
+            EdmiDateTime.ByValue from = new EdmiDateTime.ByValue(26, 6, 16, 0, 0, 0);
+            EdmiDateTime.ByValue to = new EdmiDateTime.ByValue(26, 6, 17, 0, 0, 0);
             ReportProfileData reportProfileData = (ReportProfileData) client.readProfile(survey, from, to);
             System.out.println(reportProfileData.toString());
 

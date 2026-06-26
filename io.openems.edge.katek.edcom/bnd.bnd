@@ -9,5 +9,10 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.edge.common,\
 	javax.jmdns,\
 
+Export-Package: \
+	com.ed.data, \
+	com.ed.data.history, \
+	com.ed.edcom
+
 -testpath: \
 	${testpath}

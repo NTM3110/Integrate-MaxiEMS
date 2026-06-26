@@ -1,0 +1,81 @@
+:host {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-wrapper {
+    flex: 1;
+    margin-top: var(--header-height);
+    height: calc(100vh - var(--header-height));
+    position: relative;
+}
+
+.app-container {
+    height: 100%;
+    width: 100%;
+    background-color: var(--background-color);
+}
+
+// Sidebar
+.app-sidenav {
+    width: var(--sidebar-width) !important;
+    min-width: var(--sidebar-width) !important;
+    max-width: var(--sidebar-width) !important;
+    border-right: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease;
+    overflow: visible !important;
+
+    &.collapsed {
+        width: var(--sidebar-collapsed-width) !important;
+        min-width: var(--sidebar-collapsed-width) !important;
+        max-width: var(--sidebar-collapsed-width) !important;
+    }
+}
+
+::ng-deep {
+    .mat-drawer.app-sidenav {
+        width: var(--sidebar-width);
+
+        &.collapsed {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        .mat-drawer-inner-container {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+    }
+}
+
+// Main Content 
+.app-sidenav-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    transition: margin-left 0.3s ease;
+}
+
+.main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background-color: var(--background-color);
+}
+
+// Responsive
+@media (max-width: 768px) {
+    .main-content {
+        padding: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 10px;
+    }
+}

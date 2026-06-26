@@ -1,0 +1,58 @@
+<div class="dialog-header">
+    <mat-icon>functions</mat-icon>
+    <div>
+        <h2>Energy Calculation Formula</h2>
+        <p>Current settlement logic by meter availability scenario</p>
+    </div>
+</div>
+
+<mat-dialog-content>
+    <section class="formula-section">
+        <h3>Variables</h3>
+        <div class="variable-grid">
+            <div class="variable-item" *ngFor="let variable of variables">
+                <code>{{ variable.name }}</code>
+                <span>{{ variable.description }}</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="formula-section">
+        <h3>F99_INQUALIFIED Cases</h3>
+        <div class="inqualified-panel">
+            <div class="inqualified-summary">
+                <span class="scenario-name danger">INQUALIFIED</span>
+                <span class="scenario-code">F99_INQUALIFIED</span>
+            </div>
+            <ul>
+                <li *ngFor="let item of inqualifiedCases">{{ item }}</li>
+            </ul>
+        </div>
+    </section>
+
+    <section class="formula-section">
+        <h3>Scenarios</h3>
+        <div class="scenario-list">
+            <article class="scenario-item" *ngFor="let item of scenarios">
+                <div class="scenario-heading">
+                    <div>
+                        <span class="scenario-name">{{ item.scenario }}</span>
+                        <span class="scenario-code">{{ item.code }}</span>
+                    </div>
+                    <span class="k-rule">{{ item.kRule }}</span>
+                </div>
+
+                <p class="applies">{{ item.appliesWhen }}</p>
+
+                <div class="formula-lines">
+                    <code>{{ item.rtsFormula }}</code>
+                    <code>{{ item.bessFormula }}</code>
+                </div>
+            </article>
+        </div>
+    </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-flat-button class="close-btn" (click)="close()">Close</button>
+</mat-dialog-actions>

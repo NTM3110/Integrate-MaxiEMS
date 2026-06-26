@@ -10,7 +10,9 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.edge.common,\
 	io.openems.edge.meter.api,\
 	io.openems.edge.timedata.influxdb, \
-	io.openems.wrapper.imr-java-client
+	io.openems.wrapper.imr-java-client,\
+	io.openems.edge.controller.maximeter,\
+	io.openems.edge.controller.api
 
 -testpath: \
 	${testpath}

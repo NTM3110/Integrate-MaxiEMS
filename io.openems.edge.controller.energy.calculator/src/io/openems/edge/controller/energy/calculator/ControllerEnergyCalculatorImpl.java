@@ -15,9 +15,16 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.openems.edge.common.component.ComponentManager;
 
 import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.InfluxDBClientFactory;
@@ -32,11 +39,12 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
+import io.openems.edge.controller.energy.calculator.api.EnergyCalculator;
 import io.openems.shared.influxdb.InfluxConnector;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(name = "Controller.Energy.Calculator", immediate = true, configurationPolicy = ConfigurationPolicy.REQUIRE)
-public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent implements OpenemsComponent, Controller {
+public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent implements OpenemsComponent, Controller, EnergyCalculator {
 
 	private static final String PROFILE_MEASUREMENT = "edmi_profile";
 	private static final String INTERVAL_STATE_MEASUREMENT = "energy_interval_state";
@@ -45,14 +53,35 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 	private static final String SUMMARY_MEASUREMENT = "energy_monthly_summary";
 	private static final List<String> PROFILE_FIELDS = List.of("record_status", "total_energy_tot_imp_wh",
 			"total_energy_tot_exp_wh");
-	private static final int EXPECTED_BESS_SOURCES = 4;
-	private static final int EXPECTED_RTS_SOURCES = 4;
 
 	private final Logger log = LoggerFactory.getLogger(ControllerEnergyCalculatorImpl.class);
 
 	private Config config;
-	private InfluxConnector influxConnector;
 	private int intervalMinutes;
+	private InfluxConnector influxConnector;
+	private PostgreSqlConnector postgreSqlConnector;
+
+	@Reference
+	private ComponentManager componentManager;
+
+	/**
+	 * Get total meter count across all EdmiBridge components by role and source type.
+	 */
+	private int getTotalMeterCount(String role, String sourceType) {
+		int count = 0;
+		for (OpenemsComponent component : this.componentManager.getEnabledComponents()) {
+			// Check if component is an EdmiBridge by looking for the method
+			if (component.getClass().getName().contains("EdmiBridge")) {
+				try {
+					var method = component.getClass().getMethod("getEnergyMeterCount", String.class, String.class);
+					count += (Integer) method.invoke(component, role, sourceType);
+				} catch (Exception e) {
+					// Component doesn't have the method, skip
+				}
+			}
+		}
+		return count;
+	}
 
 	public ControllerEnergyCalculatorImpl() {
 		super(OpenemsComponent.ChannelId.values(), Controller.ChannelId.values());
@@ -66,6 +95,15 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		this.influxConnector = new InfluxConnector(config.id(), config.queryLanguage(), URI.create(config.influxUrl()),
 				config.influxOrg(), config.influxApiKey(), config.influxBucket(), "maximeter-energy-calculator",
 				config.isReadOnly(), 5, config.maxQueueSize(), e -> this.log.error("InfluxDB error: {}", e.toString()));
+		
+		// Initialize PostgreSQL connector if enabled
+		if (config.enablePostgreSql()) {
+			this.postgreSqlConnector = new PostgreSqlConnector(config.id(), config.postgreSqlHost(), 
+					config.postgreSqlPort(), config.postgreSqlDatabase(), config.postgreSqlUser(), 
+					config.postgreSqlPassword(), config.postgreSqlReadOnly());
+			this.log.info("PostgreSQL connector initialized for controller [{}]", config.id());
+		}
+		
 		this.log.info("Energy Calculator Controller activated.");
 	}
 
@@ -75,13 +113,22 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		if (this.influxConnector != null) {
 			this.influxConnector.deactivate();
 		}
+		if (this.postgreSqlConnector != null) {
+			this.postgreSqlConnector.deactivate();
+		}
 		this.log.info("Energy Calculator Controller deactivated.");
 	}
 
 	@Override
 	public void run() throws OpenemsNamedException {
-		var now = Instant.now();
-		var intervalEnd = alignToInterval(now);
+		this.calculateForIntervalEnding(this.alignToInterval(Instant.now()));
+	}
+
+	@Override
+	public void calculateForIntervalEnding(Instant intervalEnd) throws OpenemsNamedException {
+		if (intervalEnd == null) {
+			return;
+		}
 		var intervalStart = intervalEnd.minus(this.intervalMinutes, ChronoUnit.MINUTES);
 		var readings = this.queryProfileReadings(intervalStart, intervalEnd);
 
@@ -92,13 +139,57 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 
 		var state = this.buildIntervalState(readings, intervalEnd);
 		this.writeIntervalState(state);
+		
+		// Also write to PostgreSQL if enabled
+		if (this.postgreSqlConnector != null) {
+			this.postgreSqlConnector.writeIntervalState(
+				state.timestamp(), state.year(), state.month(), 
+				state.selfAvailable(), state.mainAvailable(), 
+				state.backupAvailable(), state.bessAvailable(), 
+				state.rtsAvailable(), state.bessMissingCount(), 
+				state.rtsMissingCount(), state.mainMissingCount(),
+				state.backupMissingCount(), state.scenarioCode()
+			);
+		}
 
 		var monthStart = monthStart(intervalEnd);
 		var allStates = this.queryIntervalStates(monthStart, intervalEnd);
 		var periods = this.buildPeriods(allStates);
 		this.writePeriods(periods);
+		
+		// Also write periods to PostgreSQL if enabled
+		if (this.postgreSqlConnector != null) {
+			for (var period : periods) {
+				this.postgreSqlConnector.writeCalculationPeriod(
+					period.periodStart, period.periodEnd, period.year, period.month,
+					period.scenarioCode, period.formulaCode, period.intervalCount
+				);
+			}
+		}
+		
 		var summary = this.buildMonthlySummary(periods, monthStart, intervalEnd);
 		this.writeMonthlySummary(summary);
+		
+		// Also write summary to PostgreSQL if enabled
+		if (this.postgreSqlConnector != null) {
+			this.postgreSqlConnector.writeMonthlySummary(
+				summary.year, summary.month,
+				summary.bessToLmvKwh, summary.rtsToLmvKwh, summary.totalToLmvKwh,
+				summary.kFactor, summary.start, summary.end, summary.inqualifiedIntervals
+			);
+			// Write breakdowns
+			for (var breakdown : summary.breakdowns) {
+				this.postgreSqlConnector.writeMonthlyBreakdown(
+					breakdown.period.periodStart, breakdown.period.periodEnd,
+					breakdown.period.intervalCount, breakdown.period.scenarioCode,
+					breakdown.period.formulaCode, breakdown.inputs.bessDischarge,
+					breakdown.inputs.rtsExports, breakdown.inputs.selfUse,
+					breakdown.inputs.grid, breakdown.inputs.interconnect,
+					breakdown.result.k, breakdown.result.rtsToLmv,
+					breakdown.result.bessToLmv
+				);
+			}
+		}
 
 		this.log.info("Energy calculations completed for interval ending at {}", intervalEnd);
 	}
@@ -202,34 +293,62 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 	}
 
 	private IntervalState buildIntervalState(List<ProfileReading> readings, Instant ts) {
+		// Get expected counts from ALL registered bridges dynamically
+		var expectedBess = getTotalMeterCount("SOURCE", "BESS");
+		var expectedRts = getTotalMeterCount("SOURCE", "RTS");
+		var expectedMain = getTotalMeterCount("MAIN", null);
+		var expectedBackup = getTotalMeterCount("BACKUP", null);
+		
 		var bessCount = 0;
 		var rtsCount = 0;
+		var mainCount = 0;
+		var backupCount = 0;
 		var selfPresent = false;
-		var gridPresent = false;
-		var interPresent = false;
 
 		for (var reading : readings) {
-			if ("SOURCE".equals(reading.meterRole) && "BESS".equals(reading.sourceType)
-					&& positive(reading.totalEnergyTotExpWh)) {
-				bessCount++;
-			} else if ("SOURCE".equals(reading.meterRole) && "RTS".equals(reading.sourceType)
-					&& positive(reading.totalEnergyTotExpWh)) {
-				rtsCount++;
-			} else if ("SELF_USE".equals(reading.meterRole) && positive(reading.totalEnergyTotImpWh)) {
-				selfPresent = true;
-			} else if ("GRID_POINT".equals(reading.meterRole) && positive(reading.totalEnergyTotExpWh)) {
-				gridPresent = true;
-			} else if ("INTERCONNECT".equals(reading.meterRole) && positive(reading.totalEnergyTotImpWh)) {
-				interPresent = true;
+			if ("SOURCE".equals(reading.meterRole) && "BESS".equals(reading.sourceType)) {
+				// BESS source: count if data is present (even if 0 energy - no change from last interval is valid)
+				if (reading.totalEnergyTotExpWh != null) {
+					bessCount++;
+				}
+			} else if ("SOURCE".equals(reading.meterRole) && "RTS".equals(reading.sourceType)) {
+				// RTS source: count if data is present (even if 0 energy)
+				if (reading.totalEnergyTotExpWh != null) {
+					rtsCount++;
+				}
+			} else if ("SELF_USE".equals(reading.meterRole)) {
+				// SELF_USE: count if data is present (even if 0 energy)
+				if (reading.totalEnergyTotImpWh != null) {
+					selfPresent = true;
+				}
+			} else if ("MAIN".equals(reading.meterRole)) {
+				// MAIN meter: count if data is present (even if 0 energy)
+				if (reading.totalEnergyTotExpWh != null) {
+					mainCount++;
+				}
+			} else if ("BACKUP".equals(reading.meterRole)) {
+				// BACKUP meter: count if data is present (even if 0 energy)
+				if (reading.totalEnergyTotImpWh != null) {
+					backupCount++;
+				}
 			}
 		}
 
-		var bessMissing = clamp(EXPECTED_BESS_SOURCES - bessCount, 0, EXPECTED_BESS_SOURCES);
-		var rtsMissing = clamp(EXPECTED_RTS_SOURCES - rtsCount, 0, EXPECTED_RTS_SOURCES);
-		var scenario = detectScenario(bessMissing, rtsMissing, selfPresent, gridPresent, interPresent);
+		// Use dynamic expected counts from all bridges
+		var bessMissing = expectedBess > 0 ? clamp(expectedBess - bessCount, 0, expectedBess) : 0;
+		var rtsMissing = expectedRts > 0 ? clamp(expectedRts - rtsCount, 0, expectedRts) : 0;
+		var mainMissing = expectedMain > 0 ? clamp(expectedMain - mainCount, 0, expectedMain) : 0;
+		var backupMissing = expectedBackup > 0 ? clamp(expectedBackup - backupCount, 0, expectedBackup) : 0;
+		
+		// New scenario detection with MAIN/BACKUP
+		var mainAvailable = mainCount > 0;
+		var backupAvailable = backupCount > 0;
+		var scenario = detectScenario(bessMissing, rtsMissing, selfPresent, mainAvailable, backupAvailable);
 		var zdt = ts.minus(this.intervalMinutes, ChronoUnit.MINUTES).atZone(ZoneId.systemDefault());
-		return new IntervalState(ts, zdt.getYear(), zdt.getMonthValue(), selfPresent, gridPresent, interPresent,
-				bessCount > 0, rtsCount > 0, bessMissing, rtsMissing, scenario);
+		return new IntervalState(ts, zdt.getYear(), zdt.getMonthValue(), selfPresent, 
+				mainAvailable, backupAvailable,
+				bessCount > 0, rtsCount > 0, 
+				bessMissing, rtsMissing, mainMissing, backupMissing, scenario);
 	}
 
 	private List<IntervalState> queryIntervalStates(Instant start, Instant end) {
@@ -377,11 +496,14 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 	private void writeIntervalState(IntervalState state) {
 		this.influxConnector.write(Point.measurement(INTERVAL_STATE_MEASUREMENT).addTag("controller_id", this.config.id())
 				.time(state.timestamp, WritePrecision.MS).addField("year", state.year).addField("month", state.month)
-				.addField("self_available", state.selfAvailable).addField("grid_available", state.gridAvailable)
-				.addField("interconnect_available", state.interconnectAvailable)
+				.addField("self_available", state.selfAvailable).addField("main_available", state.mainAvailable)
+				.addField("backup_available", state.backupAvailable)
 				.addField("bess_available", state.bessAvailable).addField("rts_available", state.rtsAvailable)
 				.addField("bess_missing_count", state.bessMissingCount)
-				.addField("rts_missing_count", state.rtsMissingCount).addField("scenario_code", state.scenarioCode));
+				.addField("rts_missing_count", state.rtsMissingCount)
+				.addField("main_missing_count", state.mainMissingCount)
+				.addField("backup_missing_count", state.backupMissingCount)
+				.addField("scenario_code", state.scenarioCode));
 	}
 
 	private void writePeriods(List<CalculationPeriod> periods) {
@@ -439,21 +561,25 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		var ts = record.getTime();
 		return new IntervalState(ts, numberValue(record.getValueByKey("year")).intValue(),
 				numberValue(record.getValueByKey("month")).intValue(), boolValue(record.getValueByKey("self_available")),
-				boolValue(record.getValueByKey("grid_available")), boolValue(record.getValueByKey("interconnect_available")),
+				boolValue(record.getValueByKey("main_available")), boolValue(record.getValueByKey("backup_available")),
 				boolValue(record.getValueByKey("bess_available")), boolValue(record.getValueByKey("rts_available")),
 				numberValue(record.getValueByKey("bess_missing_count")).intValue(),
 				numberValue(record.getValueByKey("rts_missing_count")).intValue(),
+				numberValue(record.getValueByKey("main_missing_count")).intValue(),
+				numberValue(record.getValueByKey("backup_missing_count")).intValue(),
 				stringValue(record.getValueByKey("scenario_code")));
 	}
 
 	private static IntervalState intervalStateFromInfluxQl(InfluxQLQueryResult.Series.Record row) {
 		return new IntervalState(Instant.ofEpochMilli(Long.parseLong(row.getValueByKey("time").toString())),
 				numberValue(row.getValueByKey("year")).intValue(), numberValue(row.getValueByKey("month")).intValue(),
-				boolValue(row.getValueByKey("self_available")), boolValue(row.getValueByKey("grid_available")),
-				boolValue(row.getValueByKey("interconnect_available")), boolValue(row.getValueByKey("bess_available")),
+				boolValue(row.getValueByKey("self_available")), boolValue(row.getValueByKey("main_available")),
+				boolValue(row.getValueByKey("backup_available")), boolValue(row.getValueByKey("bess_available")),
 				boolValue(row.getValueByKey("rts_available")),
 				numberValue(row.getValueByKey("bess_missing_count")).intValue(),
 				numberValue(row.getValueByKey("rts_missing_count")).intValue(),
+				numberValue(row.getValueByKey("main_missing_count")).intValue(),
+				numberValue(row.getValueByKey("backup_missing_count")).intValue(),
 				stringValue(row.getValueByKey("scenario_code")));
 	}
 
@@ -480,13 +606,22 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		var rtsToLmv = 0.0;
 		var bessToLmv = 0.0;
 		switch (formulaCode) {
-		case "F01_NORMAL", "F02_NO_GRID", "F03_NO_INTERCONNECT" -> {
+		case "F01_NORMAL", "F03_NO_BACKUP" -> {
 			rtsToLmv = (eRts - eBessCharge - eSelf) * (1 - k);
-			bessToLmv = ("F02_NO_GRID".equals(formulaCode) ? eLmv : e) * (1 - k) - rtsToLmv;
+			bessToLmv = e * (1 - k) - rtsToLmv;
+		}
+		case "F02_NO_MAIN" -> {
+			rtsToLmv = (eRts - eBessCharge - eSelf) * (1 - k);
+			bessToLmv = eLmv * (1 - k) - rtsToLmv;
 		}
 		case "F04_ONLY_RTS_FAULTY", "F05_NO_SELF", "F06_ONLY_BESS_FAULTY", "F07_BOTH_BESS_RTS_FAULTY" -> {
 			rtsToLmv = (e - eBessDis) * (1 - k);
 			bessToLmv = eBessDis * (1 - k);
+		}
+		case "F99_INQUALIFIED" -> {
+			// No calculation for inqualified intervals
+			rtsToLmv = 0.0;
+			bessToLmv = 0.0;
 		}
 		default -> {
 		}
@@ -494,29 +629,49 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		return new PeriodResult(k, Math.max(0.0, rtsToLmv), Math.max(0.0, bessToLmv));
 	}
 
-	private static String detectScenario(int bessMissing, int rtsMissing, boolean self, boolean grid, boolean inter) {
-		if (!grid) {
-			return "NO_GRID";
+	private static boolean isIntervalQualified(int bessMissing, int rtsMissing, boolean selfAvailable, boolean mainAvailable, boolean backupAvailable) {
+		if (mainAvailable) {
+			return true;
 		}
-		if (!inter) {
-			return "NO_INTERCONNECT";
+		var sourcesComplete = bessMissing == 0 && rtsMissing == 0;
+		return backupAvailable && selfAvailable && sourcesComplete;
+	}
+
+	private static String detectScenario(int bessMissing, int rtsMissing, boolean selfAvailable, boolean mainAvailable, boolean backupAvailable) {
+		if (!isIntervalQualified(bessMissing, rtsMissing, selfAvailable, mainAvailable, backupAvailable)) {
+			return "INQUALIFIED";
 		}
-		if (!self) {
+		if (!mainAvailable) {
+			return "NO_MAIN";
+		}
+		if (!backupAvailable) {
+			return "NO_BACKUP";
+		}
+		if (!selfAvailable) {
 			return "NO_SELF";
 		}
-		if (bessMissing > 0 && rtsMissing > 0) {
+		var bessFaulty = bessMissing > 0;
+		var rtsFaulty = rtsMissing > 0;
+		if (bessFaulty && rtsFaulty) {
 			return "BESS_RTS_FAULTY";
 		}
-		if (bessMissing > 0) {
+		if (bessFaulty) {
 			return "BESS_FAULTY";
 		}
-		if (rtsMissing > 0) {
+		if (rtsFaulty) {
 			return "RTS_FAULTY";
 		}
 		return "ALL_OK";
 	}
 
 	private static String formulaFor(IntervalState state) {
+		if (!isIntervalQualified(state.bessMissingCount, state.rtsMissingCount, state.selfAvailable, state.mainAvailable, state.backupAvailable)) {
+			return "F99_INQUALIFIED";
+		}
+		if (!state.mainAvailable) {
+			return "F02_NO_MAIN";
+		}
+		// Self meter has priority
 		if (!state.selfAvailable) {
 			return "F05_NO_SELF";
 		}
@@ -531,11 +686,9 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 		if (rtsFaulty) {
 			return "F04_ONLY_RTS_FAULTY";
 		}
-		if (!state.gridAvailable) {
-			return "F02_NO_GRID";
-		}
-		if (!state.interconnectAvailable) {
-			return "F03_NO_INTERCONNECT";
+		// BACKUP only affects K (reuse last_K)
+		if (!state.backupAvailable) {
+			return "F03_NO_BACKUP";
 		}
 		return "F01_NORMAL";
 	}
@@ -636,9 +789,9 @@ public class ControllerEnergyCalculatorImpl extends AbstractOpenemsComponent imp
 			Double totalEnergyTotImpWh, Double totalEnergyTotExpWh, Double recordStatus) {
 	}
 
-	private record IntervalState(Instant timestamp, int year, int month, boolean selfAvailable, boolean gridAvailable,
-			boolean interconnectAvailable, boolean bessAvailable, boolean rtsAvailable, int bessMissingCount,
-			int rtsMissingCount, String scenarioCode) {
+	private record IntervalState(Instant timestamp, int year, int month, boolean selfAvailable, boolean mainAvailable,
+			boolean backupAvailable, boolean bessAvailable, boolean rtsAvailable, int bessMissingCount,
+			int rtsMissingCount, int mainMissingCount, int backupMissingCount, String scenarioCode) {
 	}
 
 	private static final class CalculationPeriod {

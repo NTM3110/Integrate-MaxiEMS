@@ -104,6 +104,7 @@ import gurux.io.Parity;
 import gurux.io.StopBits;
 import gurux.net.GXNet;
 import gurux.serial.GXSerial;
+import java.io.PrintWriter;
 
 public class GXDLMSReader {
     IGXMedia Media;
@@ -127,6 +128,10 @@ public class GXDLMSReader {
             System.out.println("ClientAddress: 0x" + Integer.toHexString(dlms.getClientAddress()));
             System.out.println("ServerAddress: 0x" + Integer.toHexString(dlms.getServerAddress()));
         }
+    }
+
+    public GXDLMSReader(GXDLMSSecureClient2 client, gurux.serial.GXSerial serial, gurux.common.enums.TraceLevel trace, Object frameCounter, PrintWriter logFile) {
+        this.logFile = logFile;
     }
 
     void disconnect() throws Exception {

@@ -409,6 +409,22 @@ public class InfluxConnector {
 		);
 	}
 
+	public void writeSync(Point point) {
+		if (!point.hasFields()) {
+			return;
+		}
+		if (this.isReadOnly) {
+			return;
+		}
+		try {
+			var connection = this.getInfluxConnection();
+			connection.writeApi.writePoint(point);
+		} catch (Exception e) {
+			this.log.warn("Unable to sync write to InfluxDB. " + e.getClass().getSimpleName() + ": " + e.getMessage());
+		}
+	}
+
+
 	/**
 	 * Actually write the Point to InfluxDB.
 	 *
@@ -469,3 +485,4 @@ public class InfluxConnector {
 	}
 
 }
+

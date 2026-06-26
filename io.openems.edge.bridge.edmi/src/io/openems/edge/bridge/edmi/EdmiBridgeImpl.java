@@ -4,7 +4,6 @@ import java.net.URI;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,7 +75,6 @@ public class EdmiBridgeImpl extends AbstractOpenemsComponent implements EdmiBrid
 	private String influxBucket;
 	private QueryLanguageConfig queryLanguage;
 	private ProfileIngestionSettings profileSettings = ProfileIngestionSettings.from(new DefaultConfig());
-	private EdmiEnergySeparationCalculator energyCalculator;
 	private final Map<String, EdmiEnergyMeter> energyMeters = new ConcurrentHashMap<>();
 
 	private void applyConfig(Config config) {
@@ -97,14 +95,11 @@ public class EdmiBridgeImpl extends AbstractOpenemsComponent implements EdmiBrid
 		this.influxBucket = config.bucket();
 		this.queryLanguage = config.queryLanguage();
 		this.profileSettings = ProfileIngestionSettings.from(config);
-		this.energyCalculator = new EdmiEnergySeparationCalculator(this);
 
 		this.worker = new EdmiWorker(this, point -> {
 			influxConnector.write(point);
 		}, this.profileSettings.retryMillis());
 		this.worker.activate(config.id());
-
-
 
 	}
 
@@ -164,20 +159,36 @@ public class EdmiBridgeImpl extends AbstractOpenemsComponent implements EdmiBrid
 	}
 
 	@Override
-	public void processProfileTimestamp(Instant timestamp) {
-		try {
-			Collection<EdmiEnergyMeter> meters = List.copyOf(this.energyMeters.values());
-			if (this.energyCalculator != null) {
-				this.energyCalculator.process(timestamp, meters);
-			}
-		} catch (Exception e) {
-			this.log.warn("Failed to calculate EDMI separated energy for timestamp [{}]: {}", timestamp, e.getMessage(), e);
+	public int getEnergyMeterCount(String role, String sourceType) {
+		if (role == null) {
+			return 0;
 		}
+		int count = 0;
+		for (EdmiEnergyMeter meter : this.energyMeters.values()) {
+			if (role.equals(meter.role())) {
+				if (sourceType == null || sourceType.equals(meter.sourceType())) {
+					count++;
+				}
+			}
+		}
+		return count;
 	}
+
+	@Override
+	public Map<String, EdmiEnergyMeter> getEnergyMeters() {
+		return new ConcurrentHashMap<>(this.energyMeters);
+	}
+
 
 	@Override
 	public void writeToInflux(Point point) {
 		this.worker.writeToInflux(point);
+	}
+
+	@Override
+	public void writeToInfluxSync(Point point) {
+		// Write directly to InfluxDB using blocking API, bypassing the async worker queue
+		this.influxConnector.writeSync(point);
 	}
 
 	@Override
@@ -250,18 +261,6 @@ public class EdmiBridgeImpl extends AbstractOpenemsComponent implements EdmiBrid
 			return switch (this.queryLanguage) {
 			case FLUX -> this.queryValuesByFlux(client, PROFILE_MEASUREMENT, meterId, start, end, fields);
 			case INFLUX_QL -> this.queryValuesByInfluxQl(client, PROFILE_MEASUREMENT, meterId, start, end, fields);
-			};
-		}
-	}
-
-	@Override
-	public JsonArray querySeparatedEnergyFromInflux(Instant start, Instant end, List<String> fields) throws Exception {
-		this.validateTimeAndFields(start, end, fields);
-		try (var client = this.createInfluxClient()) {
-			return switch (this.queryLanguage) {
-			case FLUX -> this.queryValuesByFlux(client, "edmi_separated_energy_interval", null, start, end, fields);
-			case INFLUX_QL -> this.queryValuesByInfluxQl(client, "edmi_separated_energy_interval", null, start, end,
-					fields);
 			};
 		}
 	}

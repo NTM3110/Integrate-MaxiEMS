@@ -75,6 +75,8 @@
 	bnd.identity;id='io.openems.edge.controller.cleverpv',\
 	bnd.identity;id='io.openems.edge.controller.debug.detailedlog',\
 	bnd.identity;id='io.openems.edge.controller.debug.log',\
+    bnd.identity;id='io.openems.edge.controller.energy.calculator',\
+	bnd.identity;id='io.openems.edge.controller.maximeter',\
 	bnd.identity;id='io.openems.edge.controller.ess.acisland',\
 	bnd.identity;id='io.openems.edge.controller.ess.activepowervoltagecharacteristic',\
 	bnd.identity;id='io.openems.edge.controller.ess.balancing',\
@@ -285,6 +287,7 @@
 	io.openems.edge.controller.cleverpv;version=snapshot,\
 	io.openems.edge.controller.debug.detailedlog;version=snapshot,\
 	io.openems.edge.controller.debug.log;version=snapshot,\
+	io.openems.edge.controller.energy.calculator;version=snapshot,\
 	io.openems.edge.controller.ess.acisland;version=snapshot,\
 	io.openems.edge.controller.ess.activepowervoltagecharacteristic;version=snapshot,\
 	io.openems.edge.controller.ess.balancing;version=snapshot,\
@@ -523,4 +526,5 @@
 	io.openems.wrapper.gurux-dlms;version=snapshot,\
 	io.openems.wrapper.gurux-net;version=snapshot,\
 	io.openems.wrapper.gurux-serial;version=snapshot,\
-	org.openmuc.j60870;version='[1.7.2,1.7.3)'
+	org.openmuc.j60870;version='[1.7.2,1.7.3)',\
+	io.openems.edge.controller.maximeter;version=snapshot

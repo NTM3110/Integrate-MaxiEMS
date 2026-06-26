@@ -3,6 +3,12 @@ Bundle-Vendor: FENECON GmbH
 Bundle-License: https://opensource.org/licenses/EPL-2.0
 Bundle-Version: 1.0.0.${tstamp}
 
+Export-Package: \
+	io.openems.edge.controller.energy.calculator.api
+
+Private-Package: \
+	io.openems.edge.controller.energy.calculator
+
 -buildpath: \
 	${buildpath},\
 	io.openems.common,\
@@ -13,7 +19,8 @@ Bundle-Version: 1.0.0.${tstamp}
     io.openems.shared.influxdb,\
     io.openems.wrapper.imr-java-client,\
     io.openems.wrapper.influxdb-client-core,\
-    io.openems.wrapper.influxdb-client-java
+    io.openems.wrapper.influxdb-client-java,\
+    org.postgresql.jdbc;version='42.7.10'
 
 -testpath: \
 	${testpath}

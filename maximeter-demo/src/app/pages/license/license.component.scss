@@ -1,0 +1,80 @@
+.license-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    background: #f0f2f5;
+}
+
+.license-card {
+    width: 100%;
+    max-width: 430px;
+    padding: 36px 32px 32px !important;
+    border-radius: 8px !important;
+    background: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.license-header {
+    margin-bottom: 28px;
+    text-align: center;
+
+    h1 {
+        margin: 18px 0 0;
+        font-size: 1.35rem;
+        font-weight: 650;
+        color: #172033;
+    }
+
+    p {
+        margin: 8px 0 0;
+        font-size: 0.8rem;
+        color: #647085;
+    }
+}
+
+.license-logo {
+    height: 48px;
+}
+
+.full-width {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.status-message,
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+
+    mat-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 20px;
+    }
+}
+
+.status-message {
+    color: #126b39;
+    background: #e8f5ed;
+}
+
+.error-message {
+    color: #c62828;
+    background: #ffebee;
+}
+
+.activate-button {
+    width: 100%;
+    height: 44px;
+    margin-top: 12px;
+    border-radius: 6px !important;
+    font-weight: 600;
+    background-color: #012596 !important;
+}

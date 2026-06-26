@@ -1,0 +1,59 @@
+<div class="sidebar-header" [class.collapsed]="isCollapsed">
+    <app-logo *ngIf="!isCollapsed" size="medium" [showText]="false"></app-logo>
+    <img *ngIf="isCollapsed" src="assets/images/AT_Energy_Key_visual.png" class="collapsed-logo" alt="Logo">
+</div>
+
+<mat-nav-list class="menu-list" [class.collapsed]="isCollapsed">
+    <ng-container *ngFor="let item of menuItems">
+        <!-- Simple menu item (no children) -->
+        <a *ngIf="!item.children || item.children.length === 0" mat-list-item [routerLink]="item.route"
+            routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+            (click)="onLinkClick()" class="menu-item" [class.collapsed]="isCollapsed"
+            [matTooltip]="isCollapsed ? item.label : ''" matTooltipPosition="right">
+            <div class="menu-item-content">
+                <mat-icon>{{ item.icon }}</mat-icon>
+                <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
+            </div>
+        </a>
+
+        <!-- Menu item with children (expandable) -->
+        <ng-container *ngIf="item.children && item.children.length > 0">
+            <!-- Expanded mode -->
+            <mat-expansion-panel *ngIf="!isCollapsed" class="mat-elevation-z0 menu-expansion-panel" hideToggle>
+                <mat-expansion-panel-header>
+                    <mat-panel-title class="panel-title">
+                        <mat-icon>{{ item.icon }}</mat-icon>
+                        <span class="panel-label">{{ item.label }}</span>
+                    </mat-panel-title>
+                </mat-expansion-panel-header>
+
+                <mat-nav-list class="submenu-list">
+                    <a *ngFor="let child of item.children" mat-list-item [routerLink]="child.route"
+                        routerLinkActive="active-link" (click)="onLinkClick()" class="submenu-item">
+                        <div class="submenu-item-content">
+                            <mat-icon>{{ child.icon }}</mat-icon>
+                            <span class="submenu-label">{{ child.label }}</span>
+                        </div>
+                    </a>
+                </mat-nav-list>
+            </mat-expansion-panel>
+
+            <!-- Collapsed mode -->
+            <a *ngIf="isCollapsed" mat-list-item [routerLink]="item.children[0].route" routerLinkActive="active-link"
+                (click)="onLinkClick()" class="menu-item collapsed" [matTooltip]="item.label"
+                matTooltipPosition="right">
+                <div class="menu-item-content">
+                    <mat-icon>{{ item.icon }}</mat-icon>
+                </div>
+            </a>
+        </ng-container>
+    </ng-container>
+</mat-nav-list>
+
+<div class="sidebar-footer" [class.collapsed]="isCollapsed">
+    <div class="version-info" *ngIf="!isCollapsed">
+        <span>&copy; 2025 AT Energy JSC.<br>All Rights Reserved.</span>
+    </div>
+    <mat-icon *ngIf="isCollapsed" class="footer-icon" matTooltip="&copy; 2025 AT Energy JSC"
+        matTooltipPosition="right">info</mat-icon>
+</div>

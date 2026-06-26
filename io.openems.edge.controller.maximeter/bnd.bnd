@@ -1,0 +1,22 @@
+Bundle-Name: OpenEMS Edge Controller MaxiMeter
+Bundle-Vendor: ATEnergy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.controller.api,\
+	io.openems.edge.controller.energy.calculator,\
+	org.osgi.service.cm;version='[1.6,2)',\
+	org.postgresql.jdbc;version='42.7.10',\
+	org.apache.felix.http.jetty12,\
+	org.apache.felix.http.servlet-api,\
+	com.google.gson
+
+Export-Package: \
+	io.openems.edge.controller.maximeter
+
+-testpath: \
+	${testpath}

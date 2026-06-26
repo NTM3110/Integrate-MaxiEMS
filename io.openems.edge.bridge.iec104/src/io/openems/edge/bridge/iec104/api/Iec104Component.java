@@ -5,11 +5,12 @@ import io.openems.common.channel.Level;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.jsonapi.ComponentJsonApi;
 
 /**
  * A Component that requires an IEC 104 connection.
  */
-public interface Iec104Component extends OpenemsComponent {
+public interface Iec104Component extends OpenemsComponent, ComponentJsonApi {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		IEC104_COMMUNICATION_FAILED(Doc.of(Level.WARNING) //

@@ -1,0 +1,15 @@
+-------- Reading GXDLMSProfileGeneric 24800 Ch. 0 Event log  #1
+Entries: 63/63
+Reading the first item of profile
+3/2/26, 5:18:43 PM | 2148007952 | 81 | 0 | 0 | 130 | 
+Reading the last day's data of profile
+-------- Reading GXDLMSProfileGeneric 25200 Ch. 0 Load profile with recording period 1  #1
+Entries: 25088/25088
+Reading the first item of profile
+7/6/23, 11:00:00 PM | 2155872256 | 0 | 0 | 130 | 81 | 11155 | 11139 | 0 | 0 | 0 | 0 | 
+Reading the last day's data of profile
+-------- Reading GXDLMSProfileGeneric 25600 Ch. 0 Data of billing period Scheme 1 #1 Unspecified number of most recent billing periods
+Entries: 13/13
+Reading the first item of profile
+9/22/25, 9:55:58 AM | 27 | 81 | 0 | 0 | 130 | 60 | 15 | 5 | 0 | 0 | 0 | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 0 | 1/1/00, 12:00:00 AM | 
+Reading the last day's data of profile

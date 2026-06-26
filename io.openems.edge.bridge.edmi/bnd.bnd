@@ -7,16 +7,34 @@ Export-Package: \
 	io.openems.edge.bridge.edmi.*,\
 	io.openems.edge.bridge.edmi.api.*
 
+
 -buildpath: \
 	${buildpath},\
 	io.openems.common,\
 	io.openems.edge.common,\
+	io.openems.edge.controller.api,\
+	io.openems.edge.controller.energy.calculator,\
 	io.openems.edge.timedata.api,\
 	io.openems.edge.timedata.influxdb,\
 	io.openems.shared.influxdb,\
 	io.openems.wrapper.imr-java-client,\
 	io.openems.wrapper.influxdb-client-core,\
-	io.openems.wrapper.influxdb-client-java,\
+	io.openems.wrapper.influxdb-client-java
 
 -testpath: \
-	${testpath}
+	${testpath},\
+	io.openems.wrapper.influxdb-client-core,\
+	io.openems.wrapper.influxdb-client-java,\
+	io.openems.wrapper.influxdb-client-utils,\
+	io.openems.wrapper.influxdb-flux-dsl,\
+	io.openems.wrapper.retrofit2,\
+	io.openems.wrapper.retrofit-converter-scalars,\
+	io.openems.wrapper.retrofit-converter-gson,\
+	io.openems.wrapper.retrofit-adapter-rxjava3,\
+	com.squareup.okhttp3;version='5.3',\
+	com.squareup.okhttp3.logging;version='5.3.2',\
+	com.squareup.okio;version='3.16.4',\
+	io.reactivex.rxjava3.rxjava;version='3.1.12',\
+	reactive-streams;version='1.0.4',\
+	org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm;version='1.9.0',\
+	org.jetbrains.kotlin.osgi-bundle;version='2.3.10'

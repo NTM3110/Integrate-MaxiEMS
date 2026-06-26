@@ -3,6 +3,7 @@ package io.openems.edge.bridge.dlms;
 import java.util.HashMap;
 import java.util.Map;
 
+import gurux.common.IGXMedia;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -244,7 +245,7 @@ public class BridgeDlmsSerialImpl extends AbstractDlmsBridge implements BridgeDl
 	}
 
 	private void initializeReaderConnection(String message) throws Exception {
-		this.reader = new GXDLMSReader(this.client, this.serial, TraceLevel.WARNING, null);
+		this.reader = new GXDLMSReader(this.client, (IGXMedia) this.serial, TraceLevel.WARNING, null);
 		this.log.info(message);
 		this.reader.initializeConnection();
 		this.log.info("Handshake successful! Connection established.");

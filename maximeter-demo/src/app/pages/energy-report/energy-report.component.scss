@@ -1,0 +1,506 @@
+// ============================================================
+// Energy Report - Styled to match Dashboard
+// ============================================================
+
+.page-container {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+
+    h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+    }
+}
+
+.date-selector {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+
+    mat-form-field {
+        width: 140px;
+    }
+}
+
+.formula-button,
+.recalculate-button {
+    height: 56px;
+    padding: 0 16px;
+    border-color: rgba(1, 37, 150, 0.28) !important;
+    color: var(--primary-color) !important;
+    font-weight: 600;
+
+    mat-icon {
+        margin-right: 6px;
+        font-size: 19px;
+        width: 19px;
+        height: 19px;
+    }
+
+    mat-spinner {
+        margin-right: 6px;
+    }
+}
+
+// ============================================================
+// Tab Group
+// ============================================================
+
+.energy-tabs {
+    ::ng-deep .mat-mdc-tab-body-content {
+        overflow: visible;
+    }
+}
+
+.tab-content {
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+// ============================================================
+// Summary Stats Cards  (matches .stat-card on dashboard)
+// ============================================================
+
+.summary-card {
+    border-radius: var(--radius-lg) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    overflow: hidden;
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: var(--primary-color);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+
+        h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        padding: 20px;
+
+        @media (max-width: 1200px) {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        @media (max-width: 600px) {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .summary-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        min-height: 140px;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .summary-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            background: var(--primary-color);
+
+            mat-icon {
+                font-size: 24px;
+                width: 24px;
+                height: 24px;
+                color: white;
+            }
+
+            &.success {
+                background: #28a745;
+            }
+
+            &.error {
+                background: #dc3545;
+            }
+
+            &.info {
+                background: #17a2b8;
+            }
+        }
+
+        .summary-content {
+            text-align: center;
+
+            .summary-value {
+                font-size: 1.5rem;
+                font-weight: 700;
+                line-height: 1.2;
+                margin-bottom: 4px;
+                color: var(--primary-color);
+            }
+
+            .summary-label {
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+            }
+        }
+
+        // Color variants per card type
+        &.card-total .summary-content .summary-value {
+            color: var(--primary-color);
+        }
+
+        &.card-bess .summary-icon {
+            background: #17a2b8;
+        }
+
+        &.card-bess .summary-content .summary-value {
+            color: #17a2b8;
+        }
+
+        &.card-rfs .summary-icon {
+            background: #28a745;
+        }
+
+        &.card-rfs .summary-content .summary-value {
+            color: #28a745;
+        }
+
+        &.card-intervals .summary-icon {
+            background: #6c757d;
+        }
+
+        &.card-intervals .summary-content .summary-value {
+            color: #6c757d;
+        }
+
+        &.card-intervals.has-error .summary-icon {
+            background: #dc3545;
+        }
+
+        &.card-intervals.has-error .summary-content .summary-value {
+            color: #dc3545;
+        }
+    }
+}
+
+// ============================================================
+// Breakdown Card  (matches .meter-table-card on dashboard)
+// ============================================================
+
+.breakdown-card {
+    border-radius: var(--radius-lg) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    overflow: hidden;
+
+    .card-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--primary-color);
+
+        h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+        }
+    }
+
+    .table-container {
+        overflow-x: auto;
+        position: relative;
+    }
+
+    .breakdown-table {
+        width: 100%;
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .faulty-row {
+            background-color: rgba(220, 53, 69, 0.05);
+
+            &:hover {
+                background-color: rgba(220, 53, 69, 0.1) !important;
+            }
+        }
+
+        tr:not(.faulty-row):hover td {
+            background-color: rgba(1, 37, 150, 0.04);
+        }
+    }
+}
+
+// ============================================================
+// History Card  (Tab 2)
+// ============================================================
+
+.history-card {
+    border-radius: var(--radius-lg) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    overflow: hidden;
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: var(--primary-color);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+
+        h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        mat-form-field {
+            width: 200px;
+
+            // Make the form field visible on dark background
+            ::ng-deep {
+                .mat-mdc-text-field-wrapper {
+                    background: rgba(255, 255, 255, 0.15);
+                }
+
+                .mat-mdc-floating-label,
+                .mdc-floating-label {
+                    color: rgba(255, 255, 255, 0.8) !important;
+                }
+
+                .mat-mdc-select-value,
+                .mat-mdc-select-arrow {
+                    color: white !important;
+                }
+
+                .mdc-notched-outline__leading,
+                .mdc-notched-outline__notch,
+                .mdc-notched-outline__trailing {
+                    border-color: rgba(255, 255, 255, 0.4) !important;
+                }
+            }
+        }
+    }
+
+    .info-message {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        background: rgba(1, 37, 150, 0.06);
+        border-left: 3px solid var(--primary-color);
+        color: var(--primary-color);
+        margin: 16px 20px;
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+
+        mat-icon {
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        span {
+            font-size: 0.85rem;
+        }
+    }
+
+    .history-list {
+        padding: 0 0 8px;
+    }
+
+    .history-table {
+        width: 100%;
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        tr:hover td {
+            background-color: rgba(1, 37, 150, 0.04);
+        }
+
+        .serial-cell {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .name-cell {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+    }
+}
+
+// ============================================================
+// Fault / Scenario Badges
+// ============================================================
+
+.fault-badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: inline-block;
+
+    &.fault-normal {
+        background: rgba(40, 167, 69, 0.12);
+        color: #28a745;
+    }
+
+    &.fault-error {
+        background: rgba(220, 53, 69, 0.12);
+        color: #dc3545;
+    }
+}
+
+// ============================================================
+// Common
+// ============================================================
+
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 48px;
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px !important;
+    color: var(--text-secondary);
+
+    mat-icon {
+        font-size: 48px;
+        width: 48px;
+        height: 48px;
+        color: var(--border-color);
+        margin-bottom: 8px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    span {
+        display: block;
+        font-size: 0.9rem;
+    }
+}
+
+// ============================================================
+// Responsive
+// ============================================================
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .date-selector {
+        width: 100%;
+        flex-wrap: wrap;
+
+        mat-form-field {
+            flex: 1;
+            min-width: 130px;
+        }
+
+        .formula-button,
+        .recalculate-button {
+            flex: 1 0 100%;
+        }
+    }
+
+    .summary-card .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .breakdown-card .card-header,
+    .history-card .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+
+        mat-form-field {
+            width: 100%;
+        }
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

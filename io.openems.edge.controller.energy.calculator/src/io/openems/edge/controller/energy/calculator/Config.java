@@ -15,6 +15,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
     @AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
     boolean enabled() default true;
 
+    // InfluxDB settings
     @AttributeDefinition(name = "InfluxDB URL", description = "URL of the InfluxDB instance")
     String influxUrl() default "http://localhost:8086";
 
@@ -38,5 +39,27 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
     @AttributeDefinition(name = "Interval Minutes", description = "Interval duration in minutes for calculations")
     int intervalMinutes() default 30;
+
+    // PostgreSQL settings
+    @AttributeDefinition(name = "PostgreSQL Host", description = "PostgreSQL host")
+    String postgreSqlHost() default "localhost";
+
+    @AttributeDefinition(name = "PostgreSQL Port", description = "PostgreSQL port")
+    int postgreSqlPort() default 5432;
+
+    @AttributeDefinition(name = "PostgreSQL Database", description = "PostgreSQL database name")
+    String postgreSqlDatabase() default "energy_reports";
+
+    @AttributeDefinition(name = "PostgreSQL User", description = "PostgreSQL username")
+    String postgreSqlUser() default "openems";
+
+    @AttributeDefinition(name = "PostgreSQL Password", description = "PostgreSQL password")
+    String postgreSqlPassword() default "";
+
+    @AttributeDefinition(name = "Enable PostgreSQL", description = "Enable writing to PostgreSQL")
+    boolean enablePostgreSql() default false;
+
+    @AttributeDefinition(name = "PostgreSQL Read Only", description = "Is the PostgreSQL connection read-only?")
+    boolean postgreSqlReadOnly() default false;
 
 }

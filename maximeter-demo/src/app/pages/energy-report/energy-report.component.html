@@ -1,0 +1,282 @@
+<div class="page-container">
+    <div class="page-header">
+        <h1>Energy Reports</h1>
+        <div class="date-selector">
+            <button mat-stroked-button class="formula-button" (click)="openFormulaDialog()"
+                matTooltip="View energy calculation formulas">
+                <mat-icon>functions</mat-icon>
+                Formula
+            </button>
+            <button mat-stroked-button class="recalculate-button" (click)="recalculateEnergy()"
+                [disabled]="isRecalculating" matTooltip="Recalculate energy from saved profile rows">
+                <mat-spinner *ngIf="isRecalculating" diameter="18"></mat-spinner>
+                <mat-icon *ngIf="!isRecalculating">refresh</mat-icon>
+                Recalculate
+            </button>
+            <mat-form-field appearance="outline">
+                <mat-label>Year</mat-label>
+                <mat-select [(ngModel)]="currentYear" (selectionChange)="onDateChange()">
+                    <mat-option *ngFor="let year of years" [value]="year">{{ year }}</mat-option>
+                </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+                <mat-label>Month</mat-label>
+                <mat-select [(ngModel)]="currentMonth" (selectionChange)="onDateChange()">
+                    <mat-option *ngFor="let month of months" [value]="month.value">{{ month.label }}</mat-option>
+                </mat-select>
+            </mat-form-field>
+        </div>
+    </div>
+
+    <mat-tab-group class="energy-tabs">
+        <!-- Tab 1: Monthly Energy Analysis -->
+        <mat-tab label="Monthly Energy Analysis">
+            <div class="tab-content">
+                <!-- Monthly Summary Card -->
+                <mat-card class="summary-card">
+                    <div class="card-header">
+                        <h2>Monthly Overview</h2>
+                        <button mat-raised-button (click)="exportToCSV()"
+                            [disabled]="!monthlyBreakdown || !monthlyBreakdown.items || monthlyBreakdown.items.length === 0"
+                            style="background:rgba(255,255,255,0.15);color:white;">
+                            <mat-icon>download</mat-icon>
+                            Export CSV
+                        </button>
+                    </div>
+
+                    <div *ngIf="isLoadingSummary" class="loading-container">
+                        <mat-spinner diameter="40"></mat-spinner>
+                    </div>
+
+                    <div *ngIf="!isLoadingSummary && summaryData" class="summary-grid">
+                        <div class="summary-item card-total">
+                            <div class="summary-icon">
+                                <mat-icon>bolt</mat-icon>
+                            </div>
+                            <div class="summary-content">
+                                <div class="summary-value">{{ summaryData.total_energy_to_lmv_kwh | number:'1.2-2' }}
+                                    kWh</div>
+                                <div class="summary-label">Total Energy to LMV</div>
+                            </div>
+                        </div>
+
+                        <div class="summary-item card-bess">
+                            <div class="summary-icon">
+                                <mat-icon>battery_charging_full</mat-icon>
+                            </div>
+                            <div class="summary-content">
+                                <div class="summary-value">{{ summaryData.bess_to_lmv_energy_kwh | number:'1.2-2' }} kWh
+                                </div>
+                                <div class="summary-label">BESS to LMV</div>
+                            </div>
+                        </div>
+
+                        <div class="summary-item card-rfs">
+                            <div class="summary-icon">
+                                <mat-icon>power</mat-icon>
+                            </div>
+                            <div class="summary-content">
+                                <div class="summary-value">{{ summaryData.rfs_to_lmv_energy_kwh | number:'1.2-2' }} kWh
+                                </div>
+                                <div class="summary-label">RTS to LMV</div>
+                            </div>
+                        </div>
+
+                        <div class="summary-item card-intervals"
+                            [class.has-error]="summaryData.number_of_inqualified_intervals > 0">
+                            <div class="summary-icon">
+                                <mat-icon>{{ summaryData.number_of_inqualified_intervals > 0 ? 'error' : 'check_circle'
+                                    }}</mat-icon>
+                            </div>
+                            <div class="summary-content">
+                                <div class="summary-value">{{ summaryData.number_of_inqualified_intervals || 0 }}</div>
+                                <div class="summary-label">Inqualified Intervals</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div *ngIf="!isLoadingSummary && !summaryData" class="no-data">
+                        <mat-icon>inbox</mat-icon>
+                        <span>No summary data available</span>
+                    </div>
+                </mat-card>
+
+                <!-- Monthly Breakdown Table -->
+                <mat-card class="breakdown-card">
+                    <div class="card-header">
+                        <h2>Period Breakdown</h2>
+                    </div>
+
+
+                    <div *ngIf="isLoadingBreakdown" class="loading-container">
+                        <mat-spinner diameter="40"></mat-spinner>
+                    </div>
+
+                    <div *ngIf="!isLoadingBreakdown && monthlyBreakdown && monthlyBreakdown.items"
+                        class="table-container">
+                        <table mat-table [dataSource]="monthlyBreakdown.items" class="breakdown-table">
+                            <!-- Period Start Column -->
+                            <ng-container matColumnDef="period_start">
+                                <th mat-header-cell *matHeaderCellDef>Start Time</th>
+                                <td mat-cell *matCellDef="let period">{{ period.period_start | date:'short' }}</td>
+                            </ng-container>
+
+                            <!-- Period End Column -->
+                            <ng-container matColumnDef="period_end">
+                                <th mat-header-cell *matHeaderCellDef>End Time</th>
+                                <td mat-cell *matCellDef="let period">{{ period.period_end | date:'short' }}</td>
+                            </ng-container>
+
+                            <!-- Scenario Code Column -->
+                            <ng-container matColumnDef="scenario_code">
+                                <th mat-header-cell *matHeaderCellDef>Scenario</th>
+                                <td mat-cell *matCellDef="let period">
+                                    <span class="fault-badge" [ngClass]="getScenarioClass(period.scenario_code)">
+                                        {{ formatScenarioCode(period.scenario_code) }}
+                                    </span>
+                                </td>
+                            </ng-container>
+
+                            <!-- Total Energy Column -->
+                            <ng-container matColumnDef="total_energy">
+                                <th mat-header-cell *matHeaderCellDef>Total_to_LMV (kWh)</th>
+                                <td mat-cell *matCellDef="let period">{{ getTotalEnergy(period) | number:'0.0' }}</td>
+                            </ng-container>
+
+                            <!-- Grid Energy Column -->
+                            <ng-container matColumnDef="grid_energy">
+                                <th mat-header-cell *matHeaderCellDef>Main (kWh)</th>
+                                <td mat-cell *matCellDef="let period">{{ period.grid_energy_kwh | number:'0.0' }}</td>
+                            </ng-container>
+
+                            <!-- Sub Grid Energy Column -->
+                            <ng-container matColumnDef="k_factor">
+                                <th mat-header-cell *matHeaderCellDef>K Factor</th>
+                                <td mat-cell *matCellDef="let period">
+                                    {{ period.k_factor === null || period.k_factor === undefined ? '-' : (period.k_factor | number:'0.0') }}
+                                </td>
+                            </ng-container>
+
+                            <!-- BESS Energy Column -->
+                            <ng-container matColumnDef="bess_energy">
+                                <th mat-header-cell *matHeaderCellDef>BESS_to_LMV (kWh)</th>
+                                <td mat-cell *matCellDef="let period">{{ period.bess_to_lmv_kwh | number:'0.0' }}</td>
+                            </ng-container>
+
+                            <ng-container matColumnDef="rts_energy">
+                                <th mat-header-cell *matHeaderCellDef>RTS_to_LMV (kWh)</th>
+                                <td mat-cell *matCellDef="let period">{{ period.rts_to_lmv_kwh | number:'0.0' }}</td>
+                            </ng-container>
+
+                            <!-- Actions Column -->
+                            <ng-container matColumnDef="actions">
+                                <th mat-header-cell *matHeaderCellDef>Actions</th>
+                                <td mat-cell *matCellDef="let period">
+                                    <button mat-icon-button *ngIf="isFaultyPeriod(period)"
+                                        (click)="viewPeriodDetails(period)" matTooltip="View meter status details">
+                                        <mat-icon>visibility</mat-icon>
+                                    </button>
+                                </td>
+                            </ng-container>
+
+                            <tr mat-header-row *matHeaderRowDef="breakdownColumns"></tr>
+                            <tr mat-row *matRowDef="let row; columns: breakdownColumns;"
+                                [class.faulty-row]="isFaultyPeriod(row)"></tr>
+                        </table>
+                    </div>
+
+                    <div *ngIf="!isLoadingBreakdown && (!monthlyBreakdown || !monthlyBreakdown.items || monthlyBreakdown.items.length === 0)"
+                        class="no-data">
+                        <mat-icon>inbox</mat-icon>
+                        <span>No breakdown data available</span>
+                    </div>
+                </mat-card>
+            </div>
+        </mat-tab>
+
+        <!-- Tab 2: Meter Status History -->
+        <mat-tab label="Meter Status History">
+            <div class="tab-content">
+                <mat-card class="history-card">
+                    <div class="card-header">
+                        <h2>Meter Fault History</h2>
+                        <mat-form-field appearance="outline">
+                            <mat-label>Filter by Meter</mat-label>
+                            <mat-select [(ngModel)]="selectedMeterId" (selectionChange)="filterHistory()">
+                                <mat-option [value]="null">All Meters</mat-option>
+                                <mat-option *ngFor="let meter of availableMeters" [value]="meter.meter_id">
+                                    {{ meter.serial_number }}
+                                </mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </div>
+
+                    <div class="info-message">
+                        <mat-icon>info</mat-icon>
+                        <span>This section shows only periods where meters experienced faults or errors.</span>
+                    </div>
+
+                    <div *ngIf="isLoadingHistory" class="loading-container">
+                        <mat-spinner diameter="40"></mat-spinner>
+                    </div>
+
+                    <div *ngIf="!isLoadingHistory && filteredHistory.length === 0" class="no-data">
+                        <mat-icon>check_circle</mat-icon>
+                        <span>No fault records found. All meters are operating normally!</span>
+                    </div>
+
+                    <!-- Placeholder for future implementation -->
+                    <div *ngIf="!isLoadingHistory && filteredHistory.length > 0" class="history-list">
+                        <div class="table-container">
+                            <table mat-table [dataSource]="filteredHistory" class="history-table">
+
+                                <!-- Meter Serial Column -->
+                                <ng-container matColumnDef="meter_serial">
+                                    <th mat-header-cell *matHeaderCellDef>Meter Serial</th>
+                                    <td mat-cell *matCellDef="let fault" class="serial-cell">{{ fault.meter_serial }}
+                                    </td>
+                                </ng-container>
+
+                                <!-- Meter Name Column -->
+                                <ng-container matColumnDef="meter_name">
+                                    <th mat-header-cell *matHeaderCellDef>Meter Name</th>
+                                    <td mat-cell *matCellDef="let fault" class="name-cell">{{ fault.meter_name || '—' }}
+                                    </td>
+                                </ng-container>
+
+                                <!-- Fault Type Column -->
+                                <ng-container matColumnDef="scenario_code">
+                                    <th mat-header-cell *matHeaderCellDef>Fault Type</th>
+                                    <td mat-cell *matCellDef="let fault">
+                                        <span class="fault-badge" [ngClass]="getScenarioClass(fault.scenario_code)">
+                                            {{ formatScenarioCode(fault.scenario_code) }}
+                                        </span>
+                                    </td>
+                                </ng-container>
+
+                                <!-- Start Time Column -->
+                                <ng-container matColumnDef="fault_start_ts">
+                                    <th mat-header-cell *matHeaderCellDef>Fault Start</th>
+                                    <td mat-cell *matCellDef="let fault">{{ fault.fault_start_ts | date:'short' }}</td>
+                                </ng-container>
+
+                                <!-- End Time Column -->
+                                <ng-container matColumnDef="fault_end_ts">
+                                    <th mat-header-cell *matHeaderCellDef>Fault End</th>
+                                    <td mat-cell *matCellDef="let fault">{{ fault.fault_end_ts | date:'short' }}</td>
+                                </ng-container>
+
+                                <tr mat-header-row
+                                    *matHeaderRowDef="['meter_serial', 'meter_name', 'scenario_code', 'fault_start_ts', 'fault_end_ts']">
+                                </tr>
+                                <tr mat-row
+                                    *matRowDef="let row; columns: ['meter_serial', 'meter_name', 'scenario_code', 'fault_start_ts', 'fault_end_ts'];">
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </mat-card>
+            </div>
+        </mat-tab>
+    </mat-tab-group>
+</div>

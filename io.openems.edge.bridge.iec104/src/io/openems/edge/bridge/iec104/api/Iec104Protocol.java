@@ -28,11 +28,13 @@ import org.slf4j.LoggerFactory;
 import io.openems.edge.bridge.iec104.api.element.Iec104BitstringElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104CounterElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104DoublePointElement;
+import io.openems.edge.bridge.iec104.api.element.Iec104DoublePointTimeElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104Element;
 import io.openems.edge.bridge.iec104.api.element.Iec104FloatElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104NormalizedValueElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104ScaledValueElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104SinglePointElement;
+import io.openems.edge.bridge.iec104.api.element.Iec104SinglePointTimeElement;
 import io.openems.edge.bridge.iec104.api.element.Iec104StepPositionElement;
 
 public class Iec104Protocol {
@@ -126,25 +128,30 @@ public class Iec104Protocol {
 				}
 				break;
 
-			// ── Single point ──────────────────────────────────────────────
-			case M_SP_NA_1:
-			case M_SP_TA_1:
-			case M_SP_TB_1:
-			case M_PS_NA_1:
-				if (element instanceof Iec104SinglePointElement && ie instanceof IeSinglePointWithQuality) {
-					((Iec104SinglePointElement) element).setValue(((IeSinglePointWithQuality) ie).isOn());
-				}
-				break;
+		// ── Single point ──────────────────────────────────────────────
+		case M_SP_NA_1:
+		case M_SP_TA_1:
+		case M_SP_TB_1:
+		case M_PS_NA_1:
+			if (element instanceof Iec104SinglePointElement && ie instanceof IeSinglePointWithQuality) {
+				((Iec104SinglePointElement) element).setValue(((IeSinglePointWithQuality) ie).isOn());
+			} else if (element instanceof Iec104SinglePointTimeElement && ie instanceof IeSinglePointWithQuality) {
+				((Iec104SinglePointTimeElement) element).setValue(((IeSinglePointWithQuality) ie).isOn());
+			}
+			break;
 
-			// ── Double point ─────────────────────────────────────────────
-			case M_DP_NA_1:
-			case M_DP_TA_1:
-			case M_DP_TB_1:
-				if (element instanceof Iec104DoublePointElement && ie instanceof IeDoublePointWithQuality) {
-					((Iec104DoublePointElement) element)
-							.setValue(((IeDoublePointWithQuality) ie).getDoublePointInformation().ordinal());
-				}
-				break;
+		// ── Double point ─────────────────────────────────────────────
+		case M_DP_NA_1:
+		case M_DP_TA_1:
+		case M_DP_TB_1:
+			if (element instanceof Iec104DoublePointElement && ie instanceof IeDoublePointWithQuality) {
+				((Iec104DoublePointElement) element)
+						.setValue(((IeDoublePointWithQuality) ie).getDoublePointInformation().ordinal());
+			} else if (element instanceof Iec104DoublePointTimeElement && ie instanceof IeDoublePointWithQuality) {
+				((Iec104DoublePointTimeElement) element)
+						.setValue(((IeDoublePointWithQuality) ie).getDoublePointInformation().ordinal());
+			}
+			break;
 
 			// ── Step position ──────────────────────────────────────────────
 			case M_ST_NA_1:
@@ -193,8 +200,9 @@ public class Iec104Protocol {
 	 * <li>Double command: C_DC_NA_1 (Type ID 46)
 	 * <li>Regulating step: C_RC_NA_1 (Type ID 47)
 	 * <li>Set point normalized: C_SE_NA_1 (Type ID 48)
-	 * <li>Set point scaled: C_SE_NB_1 (Type ID 50)
-	 * <li>Set point short float: C_SE_NC_1 (Type ID 51)
+	 * <li>Set point scaled: C_SE_NB_1 (Type ID 49)
+	 * <li>Set point short float: C_SE_NC_1 (Type ID 50)
+	 * <li>Bitstring command: C_BO_NA_1 (Type ID 51)
 	 * </ul>
 	 * 
 	 * @param commonAddress the Common Address
@@ -203,6 +211,19 @@ public class Iec104Protocol {
 	 * @return the generated {@link ASdu}, or null if unsupported
 	 */
 	public ASdu createWriteCommand(int commonAddress, int ioa, Object value) {
+		return this.createWriteCommand(commonAddress, ioa, value, false);
+	}
+
+	/**
+	 * Creates a Command ASDU based on the element type, value and select/execute flag.
+	 *
+	 * @param commonAddress the Common Address
+	 * @param ioa           the Information Object Address
+	 * @param value         the value to write
+	 * @param select        {@code true} for select, {@code false} for execute
+	 * @return the generated {@link ASdu}, or null if unsupported
+	 */
+	public ASdu createWriteCommand(int commonAddress, int ioa, Object value, boolean select) {
 		Iec104Element<?> element = this.elements.get(ioa);
 		if (element == null) {
 			LOG.warn("Cannot create write command for unmapped IOA: {}", ioa);
@@ -211,12 +232,12 @@ public class Iec104Protocol {
 
 		if (element instanceof Iec104FloatElement) {
 			if (value instanceof Number) {
-				// C_SE_NC_1 (Type ID 51) — Set point command, short float
+				// C_SE_NC_1 (Type ID 50) — Set point command, short float
 				return new ASdu(ASduType.C_SE_NC_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
 										{ new IeShortFloat(((Number) value).floatValue()),
-											new IeQualifierOfSetPointCommand(0, false) }
+											new IeQualifierOfSetPointCommand(0, select) }
 								})
 						});
 			}
@@ -226,7 +247,7 @@ public class Iec104Protocol {
 				return new ASdu(ASduType.C_SC_NA_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
-										{ new IeSingleCommand((Boolean) value, 0, false) }
+										{ new IeSingleCommand((Boolean) value, 0, select) }
 								})
 						});
 			}
@@ -238,7 +259,7 @@ public class Iec104Protocol {
 				return new ASdu(ASduType.C_DC_NA_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
-										{ new IeDoubleCommand(state, 0, false) }
+										{ new IeDoubleCommand(state, 0, select) }
 								})
 						});
 			}
@@ -250,7 +271,7 @@ public class Iec104Protocol {
 				return new ASdu(ASduType.C_RC_NA_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
-										{ new IeRegulatingStepCommand(state, 0, false) }
+										{ new IeRegulatingStepCommand(state, 0, select) }
 								})
 						});
 			}
@@ -260,25 +281,25 @@ public class Iec104Protocol {
 				return new ASdu(ASduType.C_SE_NA_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
-										{ new IeNormalizedValue(((Number) value).intValue()),
-											new IeQualifierOfSetPointCommand(0, false) }
+										{ new IeNormalizedValue(((Number) value).doubleValue()),
+											new IeQualifierOfSetPointCommand(0, select) }
 								})
 						});
 			}
 		} else if (element instanceof Iec104ScaledValueElement) {
 			if (value instanceof Number) {
-				// C_SE_NB_1 (Type ID 50) — Set point command, scaled value
+				// C_SE_NB_1 (Type ID 49) — Set point command, scaled value
 				return new ASdu(ASduType.C_SE_NB_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {
 										{ new IeScaledValue(((Number) value).intValue()),
-											new IeQualifierOfSetPointCommand(0, false) }
+											new IeQualifierOfSetPointCommand(0, select) }
 								})
 						});
 			}
 		} else if (element instanceof Iec104BitstringElement) {
 			if (value instanceof Number) {
-				// C_BO_NA_1 (Type ID 7 mirrored for command) — Bitstring command
+				// C_BO_NA_1 (Type ID 51) — Bitstring command
 				return new ASdu(ASduType.C_BO_NA_1, false, CauseOfTransmission.ACTIVATION, false, false, 0,
 						commonAddress, new InformationObject[] {
 								new InformationObject(ioa, new InformationElement[][] {

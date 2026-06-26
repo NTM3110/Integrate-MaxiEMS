@@ -1,0 +1,115 @@
+<div class="page-container">
+    <div class="page-header">
+        <h1>Calculate Energy</h1>
+    </div>
+
+    <mat-card class="tool-card">
+        <form [formGroup]="form" class="range-form">
+            <mat-form-field appearance="outline">
+                <mat-label>From</mat-label>
+                <input matInput type="datetime-local" formControlName="from_datetime">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>To</mat-label>
+                <input matInput type="datetime-local" formControlName="to_datetime">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>Survey</mat-label>
+                <input matInput formControlName="survey">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>Max Records</mat-label>
+                <input matInput type="number" min="1" formControlName="max_records">
+            </mat-form-field>
+
+            <div class="actions">
+                <button mat-raised-button color="primary" type="button" (click)="readProfiles()"
+                    [disabled]="form.invalid || isReading || isRecalculating">
+                    <mat-spinner *ngIf="isReading" diameter="18"></mat-spinner>
+                    <mat-icon *ngIf="!isReading">download</mat-icon>
+                    Read Profiles
+                </button>
+                <button mat-stroked-button type="button" (click)="recalculateEnergy()"
+                    [disabled]="form.invalid || isReading || isRecalculating">
+                    <mat-spinner *ngIf="isRecalculating" diameter="18"></mat-spinner>
+                    <mat-icon *ngIf="!isRecalculating">functions</mat-icon>
+                    Recalculate Energy
+                </button>
+            </div>
+        </form>
+    </mat-card>
+
+    <div class="summary-grid" *ngIf="lastResponse">
+        <mat-card class="summary-card">
+            <span class="summary-label">Meters</span>
+            <strong>{{ lastResponse.succeeded_meters }} / {{ lastResponse.total_meters }}</strong>
+        </mat-card>
+        <mat-card class="summary-card">
+            <span class="summary-label">Read Rows</span>
+            <strong>{{ lastResponse.read_rows }}</strong>
+        </mat-card>
+        <mat-card class="summary-card">
+            <span class="summary-label">Saved Rows</span>
+            <strong>{{ lastResponse.saved_rows }}</strong>
+        </mat-card>
+        <mat-card class="summary-card" [class.warn]="lastResponse.failed_meters > 0">
+            <span class="summary-label">Failed</span>
+            <strong>{{ lastResponse.failed_meters }}</strong>
+        </mat-card>
+    </div>
+
+    <mat-card class="meter-card">
+        <div class="card-header">
+            <h2>Meters</h2>
+            <button mat-stroked-button type="button" (click)="loadMeters()" [disabled]="isLoadingMeters || isReading">
+                <mat-icon>refresh</mat-icon>
+                Reload
+            </button>
+        </div>
+
+        <div class="table-loading" *ngIf="isLoadingMeters">
+            <mat-spinner diameter="36"></mat-spinner>
+        </div>
+
+        <div class="table-container" *ngIf="!isLoadingMeters">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Serial</th>
+                        <th>Name</th>
+                        <th>Port</th>
+                        <th>Status</th>
+                        <th>Read</th>
+                        <th>Saved</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let meter of meters">
+                        <td>{{ meter.meter_id }}</td>
+                        <td>{{ meter.serial_number }}</td>
+                        <td class="name-cell">{{ meter.meter_name || 'Meter ' + meter.meter_id }}</td>
+                        <td>{{ meter.serial_port_config_id || '-' }}</td>
+                        <td>
+                            <span class="status-pill" [ngClass]="getStatusClass(meter)">
+                                {{ getStatusLabel(meter) }}
+                            </span>
+                        </td>
+                        <td>{{ getResult(meter.meter_id)?.read_count || 0 }}</td>
+                        <td>{{ getResult(meter.meter_id)?.saved_count || 0 }}</td>
+                        <td class="error-cell">{{ getResult(meter.meter_id)?.error || '-' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="no-data" *ngIf="meters.length === 0">
+                <mat-icon>inbox</mat-icon>
+                <span>No meters found</span>
+            </div>
+        </div>
+    </mat-card>
+</div>

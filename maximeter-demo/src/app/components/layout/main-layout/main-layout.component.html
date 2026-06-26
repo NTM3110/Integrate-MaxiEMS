@@ -1,0 +1,19 @@
+<!-- Fixed Header at Top -->
+<app-header (menuToggle)="onMenuToggle()"></app-header>
+
+<!-- Main Container (Sidebar + Content) -->
+<div class="app-wrapper">
+    <mat-sidenav-container class="app-container">
+        <mat-sidenav #sidenav [mode]="isMobile ? 'over' : 'side'" [opened]="!isMobile" class="app-sidenav"
+            [class.collapsed]="isCollapsed">
+            <app-sidebar [isCollapsed]="isCollapsed" (linkClicked)="closeSidebar()">
+            </app-sidebar>
+        </mat-sidenav>
+
+        <mat-sidenav-content class="app-sidenav-content" [class.collapsed]="isCollapsed">
+            <main class="main-content">
+                <router-outlet></router-outlet>
+            </main>
+        </mat-sidenav-content>
+    </mat-sidenav-container>
+</div>

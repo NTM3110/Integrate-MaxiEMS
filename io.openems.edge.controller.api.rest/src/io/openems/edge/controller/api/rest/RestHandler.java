@@ -87,17 +87,17 @@ public class RestHandler extends Handler.Abstract {
 			var thisTarget = targets.get(0);
 			var remainingTargets = targets.subList(1, targets.size());
 
-			// Dispatch based on the first path token
-			switch (thisTarget) {
-			case "rest" -> this.handleRest(user, remainingTargets, request, response);
-			case "jsonrpc" -> {
-				switch (this.parent.getAccessMode()) {
-				case READ_ONLY -> throw new OpenemsException("REST-Api is in Read-Only mode");
-				case READ_WRITE, WRITE_ONLY -> this.handleJsonRpc(user, request, response);
-				}
+		// Dispatch based on the first path token
+		switch (thisTarget) {
+		case "rest" -> this.handleRest(user, remainingTargets, request, response);
+		case "jsonrpc" -> {
+			switch (this.parent.getAccessMode()) {
+			case READ_ONLY -> throw new OpenemsException("REST-Api is in Read-Only mode");
+			case READ_WRITE, WRITE_ONLY -> this.handleJsonRpc(user, request, response);
 			}
-			default -> throw new OpenemsException("Unknown REST endpoint: " + target);
-			}
+		}
+		default -> throw new OpenemsException("Unknown REST endpoint: " + target);
+		}
 			callback.succeeded();
 			return true;
 

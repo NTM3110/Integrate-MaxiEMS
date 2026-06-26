@@ -1,0 +1,93 @@
+<div class="dialog-header">
+    <mat-icon>assessment</mat-icon>
+    <span>Meter Status - {{ data.period.period_start | date:'short' }}</span>
+</div>
+
+<mat-dialog-content>
+    <div class="header-info">
+        <div class="info-item">
+            <span class="label">Period ID:</span>
+            <span class="value">{{ data.period.id }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Time Range:</span>
+            <span class="value">
+                {{ data.period.period_start | date:'shortTime' }} - {{ data.period.period_end | date:'shortTime' }}
+            </span>
+        </div>
+        <div class="info-item">
+            <span class="label">Scenario:</span>
+            <span class="value fault-badge" [ngClass]="getScenarioClass(data.period.scenario_code)">
+                {{ formatScenarioCode(data.period.scenario_code) }}
+            </span>
+        </div>
+    </div>
+
+    <div class="loading-container" *ngIf="data.isLoading">
+        <mat-spinner diameter="36"></mat-spinner>
+        <span>Loading details...</span>
+    </div>
+
+    <div class="error-message" *ngIf="!data.isLoading && data.error">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ data.error }}</span>
+    </div>
+
+    <div class="table-container" *ngIf="!data.isLoading && !data.error && data.meterStatus">
+        <table mat-table [dataSource]="data.meterStatus.faults || []" class="status-table">
+
+            <!-- Serial Number Column -->
+            <ng-container matColumnDef="meter_serial">
+                <th mat-header-cell *matHeaderCellDef>Meter Serial</th>
+                <td mat-cell *matCellDef="let fault" class="serial-cell">
+                    {{ fault.meter_serial }}
+                </td>
+            </ng-container>
+
+            <!-- Meter Name Column -->
+            <ng-container matColumnDef="meter_name">
+                <th mat-header-cell *matHeaderCellDef>Meter Name</th>
+                <td mat-cell *matCellDef="let fault" class="name-cell">
+                    {{ fault.meter_name || '—' }}
+                </td>
+            </ng-container>
+
+            <!-- Fault Scenario Column -->
+            <ng-container matColumnDef="scenario_code">
+                <th mat-header-cell *matHeaderCellDef>Fault Type</th>
+                <td mat-cell *matCellDef="let fault">
+                    <span class="fault-badge" [ngClass]="getScenarioClass(fault.scenario_code)">
+                        {{ formatScenarioCode(fault.scenario_code) }}
+                    </span>
+                </td>
+            </ng-container>
+
+            <!-- Fault Start Column -->
+            <ng-container matColumnDef="fault_start_ts">
+                <th mat-header-cell *matHeaderCellDef>Fault Start</th>
+                <td mat-cell *matCellDef="let fault">
+                    {{ fault.fault_start_ts | date:'short' }}
+                </td>
+            </ng-container>
+
+            <!-- Fault End Column -->
+            <ng-container matColumnDef="fault_end_ts">
+                <th mat-header-cell *matHeaderCellDef>Fault End</th>
+                <td mat-cell *matCellDef="let fault">
+                    {{ fault.fault_end_ts | date:'short' }}
+                </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+
+        <div class="no-data" *ngIf="(!data.meterStatus.faults || data.meterStatus.faults.length === 0)">
+            <span>No specific meter faults reported for this period.</span>
+        </div>
+    </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-flat-button class="close-btn" (click)="close()">Close</button>
+</mat-dialog-actions>
