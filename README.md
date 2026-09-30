@@ -28,6 +28,13 @@ The OpenEMS 'Internet of Things' stack contains three main components:
  * **OpenEMS UI** is the real-time user interface for web browsers and smartphones
  * **OpenEMS Backend** runs on a (cloud) server, connects the decentralized Edge systems and provides aggregation, monitoring and control via internet
 
+## Cấu trúc workspace tích hợp
+
+Mã nguồn BMS, EMS và các profile meter được tổ chức dưới [`apps/`](apps/README.md),
+cùng [`apps/shared/`](apps/shared/README.md). Các Bridge DLMS, EDMI và IEC 62056-21,
+OpenEMS core và ba application bundle đều nằm trong `platform/`.
+Tên bundle và lệnh Gradle không đổi. Xem [hướng dẫn cấu trúc và build](doc/workspace-layout.md).
+
 ## Features
 
 The OpenEMS software architecture was designed to leverage some features that are required by a modern and flexible Energy Management System:

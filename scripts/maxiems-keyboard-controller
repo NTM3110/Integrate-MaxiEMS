@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Run by Sway as the kiosk user. It owns wvkbd so it inherits Wayland state.
+set -euo pipefail
+
+fifo=/var/lib/maxiems/kbd/kbd-command
+keyboard=/opt/maxiems/current/helpers/wvkbd-mobintl
+[[ -x "$keyboard" ]] || { echo "Keyboard binary is missing: $keyboard" >&2; exit 1; }
+rm -f "$fifo"
+mkfifo -m 0620 "$fifo"
+chgrp openems "$fifo"
+
+keyboard_pid=''
+stop_keyboard() {
+    if [[ -n "$keyboard_pid" ]] && kill -0 "$keyboard_pid" 2>/dev/null; then
+        kill "$keyboard_pid" 2>/dev/null || true
+        wait "$keyboard_pid" 2>/dev/null || true
+    fi
+    keyboard_pid=''
+}
+trap 'stop_keyboard; rm -f "$fifo"' EXIT INT TERM
+
+while true; do
+    IFS= read -r action < "$fifo" || continue
+    case "$action" in
+        normal)
+            stop_keyboard
+            "$keyboard" & keyboard_pid=$!
+            ;;
+        dialer)
+            stop_keyboard
+            "$keyboard" -l dialer & keyboard_pid=$!
+            ;;
+        hide) stop_keyboard ;;
+    esac
+done

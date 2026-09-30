@@ -1,0 +1,149 @@
+= Api Modbus EVN
+
+The OpenEMS Edge Modbus-Slave-API for EVN provides a fixed register mapping for power system monitoring via Modbus/TCP.
+
+== Overview
+
+This controller acts as a **Modbus TCP Slave** that:
+
+1. **Provides monitoring data** to EVN via fixed register addresses
+2. **Receives P/Q setpoints** from EVN and exposes them as OpenEMS channels
+3. **Does NOT directly control inverters** - a separate controller must read the setpoint channels and implement grid power control
+
+== Architecture
+
+[source]
+----
+EVN SCADA ──Modbus TCP──> EVN Controller ──> Channels (P_OUT_SETPOINT_WATT, etc.)
+                                                       │
+                                                       ▼
+                              Grid Power Controller ──> PV Inverters
+                                      ▲
+                                      │
+                              Grid Meter (power feedback)
+----
+
+== Configuration
+
+Configure via OpenEMS UI:
+
+* **Component-ID**: Unique identifier (e.g., `ctrlEvnModbus0`)
+* **Port**: Modbus TCP port (default: 502)
+* **Max Concurrent Connections**: Maximum number of simultaneous connections
+
+== Setpoint Channels
+
+The following channels are exposed for other controllers to read:
+
+[cols="2,1,4", options="header"]
+|===
+|Channel |Type |Description
+
+|`POutEnabled` |Boolean |P-out control enabled by EVN
+|`POutSetpointPercent` |Float |P-out setpoint in percentage (0-100%)
+|`POutSetpointWatt` |Integer |P-out setpoint in Watts
+|`QOutEnabled` |Boolean |Q-out control enabled by EVN
+|`QOutSetpointPercent` |Float |Q-out setpoint in percentage (-100 to +100%)
+|`QOutSetpointVar` |Integer |Q-out setpoint in var
+|===
+
+Example: Reading setpoint from another controller:
+[source,java]
+----
+// Get EVN controller reference
+ControllerApiModbusEvn evnCtrl = componentManager.getComponent("ctrlEvnModbus0");
+
+// Check if P-out control is enabled
+if (evnCtrl.getPOutEnabled().orElse(false)) {
+    int targetPowerWatt = evnCtrl.getPOutSetpointWatt().orElse(0);
+    // Implement grid power control logic...
+}
+----
+
+== Modbus Register Mapping
+
+=== Monitoring Registers (Read-Only, FC04 - Input Registers)
+
+[cols="1,1,4,3", options="header"]
+|===
+|Address |Type |Description |Source
+
+|1-2 |Float32 |Grid Active Power (kW) |_sum/GridActivePower
+|3-4 |Float32 |Total Production Power (kW) |_sum/ProductionActivePower
+|5-6 |Float32 |Production Energy (kWh) |_sum/ProductionActiveEnergy
+|7-8 |Float32 |Grid Reactive Power (kVar) |meter0/ReactivePower
+|9-10 |Float32 |Phase Voltage L1 (V) |meter0/VoltageL1
+|11-12 |Float32 |Phase Voltage L2 (V) |meter0/VoltageL2
+|13-14 |Float32 |Phase Voltage L3 (V) |meter0/VoltageL3
+|15-16 |Float32 |Phase Current L1 (A) |meter0/CurrentL1
+|17-18 |Float32 |Phase Current L2 (A) |meter0/CurrentL2
+|19-20 |Float32 |Phase Current L3 (A) |meter0/CurrentL3
+|21-22 |Float32 |Frequency (Hz) |meter0/Frequency
+|23-24 |Float32 |Power Factor |meter0/Pf
+|25+ |Float32 |PV Inverter data (4 regs each) |pvInverterX/ActivePower, ActiveProductionEnergy
+|===
+
+=== Control Registers (Read-Write, FC03/FC06/FC16 - Holding Registers)
+
+[cols="1,1,4", options="header"]
+|===
+|Address |Type |Description
+
+|11 |UInt16 |Enable P-out Control (0=disabled, 1=enabled)
+|12 |UInt16 |Enable Q-out Control (0=disabled, 1=enabled)
+|13-14 |Float32 |SetPoint P-out (%)
+|15-16 |Float32 |SetPoint P-out (kW)
+|17-18 |Float32 |SetPoint Q-out (%)
+|19-20 |Float32 |SetPoint Q-out (kvar)
+|===
+
+== Supported Modbus Functions
+
+* **FC03**: Read Holding Registers (control values)
+* **FC04**: Read Input Registers (monitoring data)
+* **FC06**: Write Single Register (control commands)
+* **FC16**: Write Multiple Registers (float setpoints)
+
+== IEEE-754 Float Encoding
+
+All float values use IEEE-754 32-bit encoding:
+
+* Each float occupies 2 consecutive 16-bit registers
+* Byte order: Big-endian (High word first)
+* Example: Grid Power at address 1-2
+
+== Example: Reading Grid Power (Python)
+
+[source,python]
+----
+from pymodbus.client import ModbusTcpClient
+import struct
+
+client = ModbusTcpClient('192.168.1.100', port=502)
+result = client.read_input_registers(address=0, count=2, slave=1)
+
+# Convert to float
+bytes_data = struct.pack('>HH', result.registers[0], result.registers[1])
+grid_power_kw = struct.unpack('>f', bytes_data)[0]
+print(f"Grid Power: {grid_power_kw} kW")
+----
+
+== Example: Writing P-out Setpoint in kW (Python)
+
+[source,python]
+----
+from pymodbus.client import ModbusTcpClient
+import struct
+
+client = ModbusTcpClient('192.168.1.100', port=502)
+
+# Enable P-out control
+client.write_register(address=10, value=1, slave=1)
+
+# Write 100.5 kW setpoint (Float32 at address 15-16)
+value = struct.pack('>f', 100.5)
+regs = struct.unpack('>HH', value)
+client.write_registers(address=14, values=list(regs), slave=1)
+----
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.api.modbus.evn[Source Code icon:github[]]

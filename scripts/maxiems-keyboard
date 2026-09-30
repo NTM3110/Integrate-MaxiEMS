@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Root-owned narrow control surface for the Sway-owned virtual keyboard.
+set -euo pipefail
+
+[[ $# -eq 1 ]] || { echo 'Usage: maxiems-keyboard <normal|dialer|hide>' >&2; exit 2; }
+case "$1" in normal|dialer|hide) ;; *) echo 'Invalid keyboard action.' >&2; exit 2;; esac
+
+fifo=/var/lib/maxiems/kbd/kbd-command
+[[ -p "$fifo" ]] || { echo 'Virtual keyboard controller is unavailable.' >&2; exit 1; }
+# A non-blocking bounded write avoids a wedged API process when Sway is down.
+timeout 2s bash -c 'printf "%s\n" "$1" > "$2"' _ "$1" "$fifo"

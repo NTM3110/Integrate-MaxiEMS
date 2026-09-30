@@ -1,0 +1,8 @@
+= Viethao AC Meter
+
+Implemented Natures:
+- ElectricityMeter
+
+Reads three-phase voltage, current, active power, reactive power and apparent power from a Viethao Modbus meter.
+
+Configure a Modbus/TCP bridge and select the Unit-ID assigned to the target meter.

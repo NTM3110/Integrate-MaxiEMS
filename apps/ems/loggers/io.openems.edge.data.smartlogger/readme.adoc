@@ -1,0 +1,3 @@
+= io.openems.edge.data.smartlogger
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.data.smartlogger[Source Code icon:github[]]

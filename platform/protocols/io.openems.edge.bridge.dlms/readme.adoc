@@ -1,0 +1,27 @@
+= DLMS/COSEM
+
+DLMS/COSEM (Device Language Message Specification/Companion Specification for Energy Metering) is an international standard for smart meter communication. It is used by various electricity meters, including Landis+Gyr meters.
+
+== Bridge DLMS
+
+https://github.com/OpenEMS/openems/blob/develop/io.openems.edge.bridge.dlms/src/io/openems/edge/bridge/dlms/BridgeDlmsSerialImpl.java[Bridge DLMS] for communication with DLMS/COSEM devices via serial connection.
+
+== Implementation details
+
+OpenEMS Components that use DLMS communication must implement the `DlmsComponent` interface and provide a `DlmsProtocol`. A protocol uses the notion of a `Task` to define an individual DLMS Read request. The DLMS Bridge collects all protocols and manages the execution of Tasks.
+
+=== Execution of DLMS Tasks
+
+Execution of DLMS Tasks is managed by the `DlmsWorker`. It...
+- executes Read-Tasks according to their priority
+- handles defective DlmsComponents and delays reading from those components
+
+=== Priority
+
+Read-Tasks can have different priorities:
+- `HIGH`: the task is executed once every Cycle
+- `LOW`: only one task of all defined LOW priority tasks is executed per Cycle
+
+=== Channels
+
+Each DLMS Bridge provides Channels for more detailed information about the communication state.

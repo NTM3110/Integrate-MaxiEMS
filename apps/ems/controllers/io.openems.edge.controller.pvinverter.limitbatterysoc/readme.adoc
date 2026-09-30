@@ -1,0 +1,3 @@
+= Controller Inverter Limit Battery SOC
+
+Defines maximum charge and discharge SOC limits for hybrid inverter with battery.

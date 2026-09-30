@@ -1,0 +1,14 @@
+Bundle-Name: OpenEMS Edge Logger API
+Bundle-Vendor: MAXiCom
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+Export-Package: io.openems.edge.logger.api
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.meter.api,\
+
+-testpath: \
+	${testpath}

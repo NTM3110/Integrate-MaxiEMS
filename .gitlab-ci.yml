@@ -1,0 +1,104 @@
+stages:
+  - test
+  - package
+  - publish
+  - release
+
+default:
+  tags:
+    - a-linh-runner
+  interruptible: true
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-ci"
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.workers.max=2
+    -Dfile.encoding=UTF-8
+  EDGE_PACKAGE_NAME: "maxiems-edge"
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_BRANCH == "deploy"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "deploy"'
+    - when: never
+
+.gradle_job:
+  image: eclipse-temurin:21-jdk-jammy
+  cache:
+    key: "gradle-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .gradle-ci/caches/
+      - .gradle-ci/wrapper/
+  before_script:
+    - chmod +x gradlew
+
+java_validation:
+  extends: .gradle_job
+  stage: test
+  script:
+    - ./gradlew --no-daemon --max-workers=2 testEdge assembleEdge --console=plain
+
+package_edge:
+  extends: .gradle_job
+  stage: package
+  needs:
+    - java_validation
+  script:
+    - ./gradlew --no-daemon --max-workers=2 buildEdge --console=plain
+    - export EDGE_VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - mkdir -p dist
+    - cp build/openems-edge.jar "dist/${EDGE_PACKAGE_NAME}-${EDGE_VERSION}.jar"
+    - cd dist
+    - sha256sum "${EDGE_PACKAGE_NAME}-${EDGE_VERSION}.jar" > "${EDGE_PACKAGE_NAME}-${EDGE_VERSION}.jar.sha256"
+  artifacts:
+    name: "edge-$CI_COMMIT_REF_SLUG"
+    paths:
+      - dist/*.jar
+      - dist/*.sha256
+    expire_in: 7 days
+
+publish_edge:
+  image:
+    name: curlimages/curl:8.12.1
+    entrypoint: [""]
+  stage: publish
+  needs:
+    - job: package_edge
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  script:
+    - >-
+      curl --fail-with-body
+      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
+      --upload-file "dist/${EDGE_PACKAGE_NAME}-${CI_COMMIT_TAG}.jar"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${EDGE_PACKAGE_NAME}/${CI_COMMIT_TAG}/${EDGE_PACKAGE_NAME}-${CI_COMMIT_TAG}.jar"
+    - >-
+      curl --fail-with-body
+      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
+      --upload-file "dist/${EDGE_PACKAGE_NAME}-${CI_COMMIT_TAG}.jar.sha256"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${EDGE_PACKAGE_NAME}/${CI_COMMIT_TAG}/${EDGE_PACKAGE_NAME}-${CI_COMMIT_TAG}.jar.sha256"
+
+create_release:
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  stage: release
+  needs:
+    - publish_edge
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  script:
+    - echo "Creating GitLab release ${CI_COMMIT_TAG}"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    name: 'MAXiEMS Edge $CI_COMMIT_TAG'
+    description: '$CI_COMMIT_TAG_MESSAGE'
+    assets:
+      links:
+        - name: 'MAXiEMS Edge JAR'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$EDGE_PACKAGE_NAME/$CI_COMMIT_TAG/$EDGE_PACKAGE_NAME-$CI_COMMIT_TAG.jar'
+          link_type: package
+        - name: 'SHA-256 checksum'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$EDGE_PACKAGE_NAME/$CI_COMMIT_TAG/$EDGE_PACKAGE_NAME-$CI_COMMIT_TAG.jar.sha256'
+          link_type: other

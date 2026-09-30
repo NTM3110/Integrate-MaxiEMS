@@ -33,6 +33,7 @@ testem.log
 #System Files
 .DS_Store
 .gradle/
+/.bnd-workspace/
 /generated/
 
 ### Eclipse ###
@@ -56,6 +57,8 @@ local.properties
 
 # PyDev specific (Python IDE for Eclipse)
 *.pydevproject
+__pycache__/
+*.py[cod]
 
 # CDT-specific (C/C++ Development Tooling)
 .cproject
@@ -225,12 +228,12 @@ gradle-app.setting
 .atom-build.yml
 
 # OpenEMS temp files
-io.openems.edge.controller.api.mqtt/edge0
-io.openems.edge.application/c:/
+platform/edge/io.openems.edge.controller.api.mqtt/edge0
+platform/applications/io.openems.edge.application/c:/
 
-/io.openems.*/bin/
-/io.openems.*/bin_test/
-/io.openems.*/generated/
+**/io.openems.*/bin/
+**/io.openems.*/bin_test/
+**/io.openems.*/generated/
 
 ### Debian ###
 !tools/debian/**
@@ -241,7 +244,21 @@ docker-compose.override.yml
 # Ignore data, config, and build directories anywhere in the project
 data/
 config/
+config-bms/
+data-bms/
+config-bms-demo/
+data-bms-demo/
 build/
+
+# Java packages named data/config are source code, not runtime state. The old paths
+# were tracked already; relocation must not silently hide these source files.
+!**/src/**/data/
+!**/test/**/data/
+!**/src/**/config/
+!**/test/**/config/
 
 # Isolated git worktrees
 .worktrees/
+
+# Local GitLab Runner registration token
+token.txt

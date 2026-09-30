@@ -1,0 +1,15 @@
+Bundle-Name: OpenEMS Edge Controller Wika Alarm
+Bundle-Vendor: MAXiCom
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.controller.api,\
+	io.openems.edge.notification.email,\
+	io.openems.edge.wika.api,\
+
+-testpath: \
+	${testpath}

@@ -1,0 +1,8 @@
+= SMA Data Manager AC Output Meter
+
+Implemented Natures:
+- ElectricityMeter
+
+Reads the AC-side values P, Q, apparent power, current, voltage, frequency and power factor from devices exposed by an SMA Data Manager EDMM-10/EDMM-20.
+
+Configure a Modbus/TCP bridge for the SMA Data Manager and select the Unit-ID assigned to the target device. Device Unit-IDs start at 10.

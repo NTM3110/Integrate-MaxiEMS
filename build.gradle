@@ -57,6 +57,10 @@ subprojects {
 
 	tasks.withType(Test).configureEach {
 		maxParallelForks = Runtime.runtime.availableProcessors() * 0.66 as Integer
+		if (project.name == 'io.openems.edge.bridge.iec104') {
+			// This bundle provides a Python hardware simulator, but no JVM tests.
+			failOnNoDiscoveredTests = false
+		}
 		reports {
 			html.required = false
 			junitXml.required = false
@@ -287,7 +291,7 @@ task buildEdge() {
 	outputs.upToDateWhen { false }
 	
 	doLast {
-		def source = file("io.openems.edge.application/generated/distributions/executable/EdgeApp.jar")
+		def source = project(':io.openems.edge.application').file("generated/distributions/executable/EdgeApp.jar")
 		def output = providers.gradleProperty('oems.edge.output')
 			.orElse(providers.environmentVariable('OEMS_EDGE_OUTPUT'))
 			.orElse(layout.buildDirectory.file("openems-edge.jar").map { it.asFile.path })
@@ -324,7 +328,7 @@ task buildBackend() {
 	outputs.upToDateWhen { false }
 
 	doLast {
-		def source = file("io.openems.backend.application/generated/distributions/executable/BackendApp.jar")
+		def source = project(':io.openems.backend.application').file("generated/distributions/executable/BackendApp.jar")
 		def output = providers.gradleProperty('oems.backend.output')
 			.orElse(providers.environmentVariable('OEMS_BACKEND_OUTPUT'))
 			.orElse(layout.buildDirectory.file("openems-backend.jar").map { it.asFile.path })
@@ -361,7 +365,7 @@ tasks.register('buildBackendEdge') {
 	outputs.upToDateWhen { false }
 
 	doLast {
-		def source = file("io.openems.backend.edge.application/generated/distributions/executable/BackendEdgeApp.jar")
+		def source = project(':io.openems.backend.edge.application').file("generated/distributions/executable/BackendEdgeApp.jar")
 		def output = providers.gradleProperty('oems.backend.edge.output')
 				.orElse(providers.environmentVariable('OEMS_BACKEND_EDGE_OUTPUT'))
 				.orElse(layout.buildDirectory.file("openems-backend-edge.jar").map { it.asFile.path })

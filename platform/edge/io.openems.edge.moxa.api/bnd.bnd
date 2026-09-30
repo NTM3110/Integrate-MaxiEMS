@@ -1,0 +1,13 @@
+Bundle-Name: OpenEMS Edge Moxa API
+Bundle-Vendor: MAXiCom
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+Export-Package: io.openems.edge.moxa.api
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+
+-testpath: \
+	${testpath}

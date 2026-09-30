@@ -3,7 +3,7 @@
 # Provides commonly used functions and variables
 
 _get_version() {
-    SRC_OPENEMS_CONSTANTS="${SRC_OPENEMS_CONSTANTS:-io.openems.common/src/io/openems/common/OpenemsConstants.java}"
+    SRC_OPENEMS_CONSTANTS="${SRC_OPENEMS_CONSTANTS:-platform/common/io.openems.common/src/io/openems/common/OpenemsConstants.java}"
     SRC_PACKAGE_JSON="${SRC_PACKAGE_JSON:-ui/package.json}"
 
     if [ -f "${SRC_PACKAGE_JSON}" ]; then
@@ -36,7 +36,7 @@ _get_version() {
 
 common_initialize_environment() {
     # Code files relevant for version
-    SRC_OPENEMS_CONSTANTS="io.openems.common/src/io/openems/common/OpenemsConstants.java"
+    SRC_OPENEMS_CONSTANTS="platform/common/io.openems.common/src/io/openems/common/OpenemsConstants.java"
     SRC_PACKAGE_JSON="ui/package.json"
     SRC_PACKAGE_LOCK_JSON="ui/package-lock.json"
     SRC_CHANGELOG_CONSTANTS="ui/src/app/changelog/view/component/changelog.constants.ts"
@@ -121,7 +121,7 @@ common_print_banner() {
 common_build_backend() {
     common_print_banner "Build OpenEMS Backend"
     ./gradlew "$@" --build-cache buildBackend resolve.BackendApp
-    git diff --exit-code io.openems.backend.application/BackendApp.bndrun
+    git diff --exit-code platform/applications/io.openems.backend.application/BackendApp.bndrun
 }
 
 # Build OpenEMS Edge and UI in parallel
@@ -136,7 +136,7 @@ common_build_edge_and_ui_in_parallel() {
 common_build_edge() {
     common_print_banner "Build OpenEMS Edge"
     ./gradlew "$@" --build-cache buildEdge resolve.EdgeApp
-    git diff --exit-code io.openems.edge.application/EdgeApp.bndrun
+    git diff --exit-code platform/applications/io.openems.edge.application/EdgeApp.bndrun
 }
 
 # Run OpenEMS Checkstyle

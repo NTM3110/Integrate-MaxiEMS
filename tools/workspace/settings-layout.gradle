@@ -1,0 +1,52 @@
+import java.nio.file.Files
+import java.nio.file.LinkOption
+
+// Physical source ownership is independent of stable Gradle/OSGi project names.
+def bundles = new TreeMap<String, File>()
+['apps', 'platform'].each { group ->
+    fileTree(new File(rootDir, group)) {
+        include '**/bnd.bnd'
+        exclude '**/generated/**', '**/bin/**', '**/build/**'
+    }.files.each { descriptor ->
+        def directory = descriptor.parentFile
+        if (bundles.putIfAbsent(directory.name, directory) != null) {
+            throw new GradleException("Duplicate bundle name: ${directory.name}")
+        }
+    }
+}
+if (bundles.isEmpty()) {
+    throw new GradleException('No bundles found under apps/ or platform/')
+}
+
+// Bnd 7 requires flat project lookup. This generated view contains only links;
+// sources and outputs remain in their ownership folders.
+def workspaceDir = new File(rootDir, '.bnd-workspace')
+Files.createDirectories(workspaceDir.toPath())
+def targets = new TreeMap<String, File>(bundles)
+targets.put('cnf', new File(rootDir, 'cnf'))
+workspaceDir.listFiles().each { entry ->
+    if (Files.isSymbolicLink(entry.toPath()) && !targets.containsKey(entry.name)) {
+        Files.delete(entry.toPath())
+    }
+}
+targets.each { name, directory ->
+    def link = new File(workspaceDir, name).toPath()
+    def relativeTarget = workspaceDir.toPath().relativize(directory.toPath())
+    if (Files.isSymbolicLink(link) && Files.readSymbolicLink(link) != relativeTarget) {
+        Files.delete(link)
+    }
+    if (!Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
+        try {
+            Files.createSymbolicLink(link, relativeTarget)
+        } catch (IOException ex) {
+            throw new GradleException('Cannot create Bnd workspace links. On Windows enable Developer Mode or run with symlink privileges.', ex)
+        }
+    } else if (!Files.isSymbolicLink(link)) {
+        throw new GradleException("Refusing to replace non-link in generated workspace: ${link}")
+    }
+}
+
+bundles.each { name, directory ->
+    include ":${name}"
+    project(":${name}").projectDir = directory
+}

@@ -48,59 +48,44 @@ Relevant background reading already in the repository:
 
 ## 3. Repository structure
 
-```
+Mã nguồn được tổ chức theo ứng dụng; xem [doc/workspace-layout.md](doc/workspace-layout.md)
+và [apps/README.md](apps/README.md).
+
+```text
 .
-├── build.gradle                 # Root Gradle build script; defines OpenEMS-Build/OpenEMS-Test tasks
-├── settings.gradle              # Includes every directory containing a bnd.bnd file
-├── gradle.properties            # Java 21, Bnd 7.2.1, Gradle tuning
-├── cnf/                         # Bnd workspace configuration
-│   ├── build.bnd                # Workspace defaults (buildpath, testpath, repos, Java 21)
-│   ├── pom.xml                  # Maven dependencies consumed by BndPomRepository
-│   ├── checkstyle.xml           # Checkstyle rules (currently disabled in Gradle)
-│   ├── templates/               # Bnd project templates
-│   └── release/                 # Local release repo
-├── io.openems.common/           # Shared utilities, JSON-RPC, WebSocket, Excel/OPC helpers, Bnd templates
-├── io.openems.common.bridge.http/
-├── io.openems.core.logger/      # Logging bootstrap bundle
-├── io.openems.shared.influxdb/  # Shared InfluxDB connector code
-├── io.openems.wrapper/          # OSGi wrapper bundles for third-party libraries
-├── io.openems.oem.openems/      # OEM branding defaults
-├── io.openems.edge.*            # Edge bundles (~190 bundles)
-│   ├── io.openems.edge.application/      # Edge application + EdgeApp.bndrun
-│   ├── io.openems.edge.common/           # Edge base classes and Channel framework
-│   ├── io.openems.edge.core/             # Core Edge services (ComponentManager, Cycle, Scheduler, Sum, ...)
-│   ├── io.openems.edge.bridge.{modbus,mbus,mqtt,http,onewire,dlms,edmi,iec104}/
-│   ├── io.openems.edge.controller.*      # Control algorithms
-│   ├── io.openems.edge.ess.*             # Energy storage systems
-│   ├── io.openems.edge.battery.*         # Batteries
-│   ├── io.openems.edge.batteryinverter.*
-│   ├── io.openems.edge.meter.*           # Meters (including EDMI, IEC104 test, Landis DLMS)
-│   ├── io.openems.edge.evcs.* / evse.*   # EV charging
-│   ├── io.openems.edge.pvinverter.*      # PV inverters
-│   ├── io.openems.edge.scheduler.*       # Schedulers
-│   ├── io.openems.edge.timedata.*        # Time-series persistence
-│   ├── io.openems.edge.timeofusetariff.*
-│   ├── io.openems.edge.predictor.*
-│   └── ...
-├── io.openems.backend.*         # Backend bundles (~20 bundles)
-│   ├── io.openems.backend.application/   # Backend application + BackendApp.bndrun
-│   ├── io.openems.backend.edge.application/  # BackendEdgeApp.bndrun
-│   ├── io.openems.backend.common/
-│   ├── io.openems.backend.core/
-│   ├── io.openems.backend.metadata.*
-│   ├── io.openems.backend.timedata.*
-│   ├── io.openems.backend.b2brest/
-│   ├── io.openems.backend.b2bwebsocket/
-│   ├── io.openems.backend.uiwebsocket/
-│   └── ...
-├── doc/                         # Antora documentation source
-├── tools/                       # Build helpers, Debian/Docker packaging, Drone/Woodpecker CI scripts
-├── config/                      # Runtime OSGi Config Admin files (gitignored; present locally)
-├── data/                        # Runtime data, e.g. RRD4J files (gitignored)
-└── build/                       # Gradle + assembled fat JARs (gitignored)
+├── apps/
+│   ├── bms/{controllers,services,endpoints,drivers}/
+│   ├── ems/{controllers,services,inverters,meters,loggers}/
+│   ├── profile-meter/{meters,services}/
+│   └── shared/{serial,tcp,ethernet,lte,system}/
+├── platform/{common,edge,backend,protocols,devices,wrappers,applications}/
+├── cnf/                        # Cấu hình Bnd, pom.xml, checkstyle
+├── tests/workspace/            # Kiểm thử cấu trúc
+├── tools/workspace/            # Discovery, migration và ánh xạ đường dẫn cũ
+├── tools/
+├── deploy/
+├── doc/
+├── config/                     # Runtime, gitignored
+├── data/                       # Runtime, gitignored
+├── build/                      # Generated, gitignored
+└── .bnd-workspace/              # View symlink do Gradle tạo, gitignored
 ```
 
-The repository contains **232 top-level OSGi bundle directories**. Each bundle is a Gradle subproject and must contain a `bnd.bnd` file; `settings.gradle` discovers them automatically.
+292 bundle gốc đã di chuyển nguyên vẹn; các bundle shared và profile-meter mới
+được Gradle tự động phát hiện trong cấu trúc hiện tại. Giữ cấu trúc nội bộ
+`bnd.bnd`, `src/`, `test/` và tên Java/OSGi hiện có.
+
+`settings.gradle` cùng `tools/workspace/settings-layout.gradle` tự tìm bundle
+trong `apps/` và `platform/`. Bnd dùng view phẳng
+`.bnd-workspace/`; Gradle projectDir trỏ tới thư mục nguồn thật.
+Không tạo lại bundle tại root hoặc thêm bản sao vào nhiều app.
+Windows cần quyền tạo symbolic link.
+
+Tên task theo bundle hiện tại, ví dụ `:io.openems.edge.bms.service:test`.
+Những đường dẫn bundle phẳng trong tài liệu cũ được tra bằng
+`tools/workspace/legacy-paths.json`. BMS-specific maintenance vẫn thuộc BMS;
+shared không được phụ thuộc ngược vào bundle BMS/EMS. Các Java package cũ của
+shared được giữ để tương thích, không phản ánh quyền sở hữu thư mục mới.
 
 ## 4. Build system and commands
 
@@ -146,7 +131,10 @@ The `.bndrun` files (`EdgeApp.bndrun`, `BackendApp.bndrun`, `BackendEdgeApp.bndr
 ./gradlew :io.openems.edge.application:export.EdgeApp
 ```
 
-`tools/prepare-commit.sh` contains an `update_bndrun` helper that regenerates `-runrequires` from the bundle list and re-resolves all three applications. This script also normalizes Eclipse `.classpath`/`.project` files and ensures every `test/` directory has a `.gitignore`.
+`tools/prepare-commit.sh` tìm bundle trong cấu trúc mới, bổ sung ignore cho output/test,
+build và resolve ba application. Script giữ nguyên `-runrequires` đã chọn,
+không tự thêm toàn bộ bundle vào runtime, không ghi đè metadata Eclipse,
+và bỏ qua bước UI nếu `ui/` không tồn tại.
 
 ### 4.4 CI / packaging
 
@@ -188,7 +176,7 @@ Default web consoles (default credentials are typically `admin`/`admin`):
 
 ### 5.2 Configuration
 
-Runtime configuration is stored under `config/` (Edge) or `c:/openems-backend/config` (Backend) as OSGi Config Admin `.config` files. The `.gitignore` ignores `config/`, `data/`, and `build/` anywhere in the tree, so runtime state is not committed.
+Runtime configuration is stored under `config/` (Edge) or `c:/openems-backend/config` (Backend) as OSGi Config Admin `.config` files. The `.gitignore` ignores runtime `config/`, `data/`, and `build/`; source/test Java packages named `config` or `data` are explicitly exempt so relocation does not hide code.
 
 Example EDMI component config (see `EDMI_TESTING_GUIDE.md`):
 

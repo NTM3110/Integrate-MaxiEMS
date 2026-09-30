@@ -1,0 +1,120 @@
+= OpenEMS Edge Modem 4G Manager
+
+This bundle provides 4G/LTE modem management for OpenEMS Edge using Quectel ECM or PPP.
+
+== Features
+
+* Auto-detect usable Quectel AT command ports (`ttyUSB*`/`ttyACM*`), preferring `/dev/ttyUSB2`
+* Monitor signal strength, operator, connection status
+* Configure Quectel EC200 ECM with `AT+QICSGP` and `AT+QNETDEVCTL=1,1,1`
+* Preserve EC25 and other non-EC200 PPP setup via `/etc/ppp/quectel-pppd.sh`
+* JSON-RPC API for remote configuration
+
+== Requirements
+
+* Linux with `bash`, `ip`, `stty`, `timeout`; PPP fallback setup also requires `python3`
+* Quectel EC200 in ECM mode (`usbnet=1`) or EC25/EG25 style PPP modem
+* For PPP fallback: `/etc/ppp/quectel-pppd.sh` from the Quectel SDK
+* OpenEMS Edge service user with the required operating-system permissions
+
+== Setup
+
+1. Install PPP for EC25/PPP setups:
++
+[source,bash]
+----
+sudo apt install ppp
+----
+
+2. For EC200 ECM, configure the modem for ECM (`usbnet=1`) and make sure a modem interface like `usb0` or `wwan0` receives an IPv4 address.
+
+3. For EC25/PPP fallback, install the Quectel PPP script to `/etc/ppp/quectel-pppd.sh`.
+
+4. Configure operating-system permissions if OpenEMS does not run as root. The setup installs a root-owned helper that only updates `/etc/ppp/quectel-pppd.sh`; it does not grant unrestricted `sed`, `grep`, or shell access:
++
+[source,bash]
+----
+cd scripts/
+chmod +x setup-modem-sudoers.sh
+sudo ./setup-modem-sudoers.sh openems
+----
+
+5. Verify modem interfaces:
++
+[source,bash]
+----
+ip -o -4 addr show up scope global
+----
+
+== Configuration
+
+In Apache Felix Web Console, configure `Modem.4G.Manager`:
+
+* **APN**: Access Point Name (e.g., `v-internet`, `m-wap`)
+* **Username**: APN username (optional)
+* **Password**: APN password (optional)
+
+For EC200 modems the module sends these settings to CID 1 with `AT+QICSGP` and starts ECM with `AT+QNETDEVCTL=1,1,1`. The module reports `CONNECTED` only when `AT+QNETDEVCTL?` returns `+QNETDEVCTL: 1,1,1,1` and a modem-like interface (`usb*`, `wwan*`, or `ppp*`) has a global IPv4 address.
+
+For non-EC200 modems the module updates `/etc/ppp/quectel-pppd.sh` with these values and leaves PPP startup behavior unchanged:
+[source,bash]
+----
+QL_APN=v-internet
+QL_USER=
+QL_PASSWORD=
+----
+
+The IP address is discovered from `ip -o -4 addr show up scope global`; interfaces like `eth*`, `wlan*`, `tailscale*`, and `lo` are ignored.
+
+== JSON-RPC API
+
+=== getModemStatus
+
+Get current modem status.
+
+.Response
+[source,json]
+----
+{
+  "status": "CONNECTED",
+  "signalStrength": 75,
+  "operator": "Viettel",
+  "ipAddress": "10.1.2.3",
+  "connectionType": "LTE",
+  "modemModel": "Quectel EG25",
+  "imei": "123456789012345"
+}
+----
+
+=== getModemConfig
+
+Get current APN configuration.
+
+.Response
+[source,json]
+----
+{
+  "apn": "v-internet",
+  "username": "",
+  "password": ""
+}
+----
+
+=== setModemConfig
+
+Set new APN configuration.
+
+.Request
+[source,json]
+----
+{
+  "jsonrpc": "2.0",
+  "id": "uuid",
+  "method": "setModemConfig",
+  "params": {
+    "apn": "v-internet",
+    "username": "",
+    "password": ""
+  }
+}
+----

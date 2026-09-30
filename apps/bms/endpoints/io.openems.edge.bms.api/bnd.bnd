@@ -1,0 +1,14 @@
+Bundle-Name: OpenEMS Edge BMS WebSocket API
+Bundle-Vendor: ATEnergy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.bms.service,\
+	io.openems.edge.modem.4g,\
+
+-testpath: \
+	${testpath}

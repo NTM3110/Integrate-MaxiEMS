@@ -1,0 +1,16 @@
+Bundle-Name: OpenEMS Edge Bridge IEC 62056-21
+Bundle-Vendor: ATEnergy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+Export-Package: \
+	io.openems.edge.bridge.iec6205621
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.common,\
+	com.fazecast.jSerialComm
+
+-testpath: \
+	${testpath}

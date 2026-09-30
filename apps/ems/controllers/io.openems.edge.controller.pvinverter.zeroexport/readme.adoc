@@ -1,0 +1,5 @@
+= PV-Inverter Zero Export
+
+Controls PV-Inverter production at the grid connection point. The default local target is zero export; EVN setpoints can override it when enabled.
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.pvinverter.zeroexport[Source Code icon:github[]]

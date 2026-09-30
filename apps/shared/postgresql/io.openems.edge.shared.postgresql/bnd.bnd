@@ -1,0 +1,15 @@
+Bundle-Name: OpenEMS Edge Shared PostgreSQL
+Bundle-Vendor: AT Energy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+Export-Package: io.openems.edge.shared.postgresql
+Private-Package: io.openems.edge.shared.postgresql.internal
+
+-buildpath: \
+	${buildpath},\
+	com.zaxxer.HikariCP,\
+	org.postgresql.jdbc
+
+-testpath: \
+	${testpath}

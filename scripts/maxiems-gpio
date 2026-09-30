@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Root-owned GPIO configuration helper.  Its JSON interface is intentionally
+# small because it is reachable through a constrained sudoers rule.
+set -euo pipefail
+
+action="${1:-}"
+case "$action" in
+    status|save) ;;
+    *) echo "Usage: $0 status|save" >&2; exit 2 ;;
+esac
+
+exec python3 -c '
+import json
+import os
+import sys
+import tempfile
+
+ACTION = sys.argv[1]
+CONFIG = "/etc/maxiems/gpio-alarm.json"
+PINS = {"1": (0, 33), "2": (1, 32)}
+DEFAULTS = {
+    "1": {"alarmValue": 1, "direction": "output"},
+    "2": {"alarmValue": 1, "direction": "output"},
+}
+
+def load_config():
+    try:
+        with open(CONFIG, encoding="utf-8") as source:
+            value = json.load(source)
+    except FileNotFoundError:
+        value = {}
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("Cannot read GPIO configuration: " + str(error))
+    result = {key: dict(default) for key, default in DEFAULTS.items()}
+    strings = value.get("strings", {}) if isinstance(value, dict) else {}
+    if isinstance(strings, dict):
+        for key in result:
+            candidate = strings.get(key, {})
+            if isinstance(candidate, dict):
+                if candidate.get("alarmValue") in (0, 1):
+                    result[key]["alarmValue"] = candidate["alarmValue"]
+                if candidate.get("direction") in ("input", "output"):
+                    result[key]["direction"] = candidate["direction"]
+    return result
+
+def save_config(strings):
+    directory = os.path.dirname(CONFIG)
+    os.makedirs(directory, mode=0o750, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".gpio-alarm.", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as target:
+            json.dump({"strings": strings}, target, separators=(",", ":"))
+            target.write("\n")
+            target.flush()
+            os.fsync(target.fileno())
+        os.chmod(temporary, 0o640)
+        os.replace(temporary, CONFIG)
+    except Exception:
+        try: os.unlink(temporary)
+        except FileNotFoundError: pass
+        raise
+
+def read_file(path):
+    try:
+        with open(path, encoding="ascii") as source:
+            return source.read().strip()
+    except OSError:
+        return None
+
+def apply(pin, direction, value):
+    base = "/sys/class/gpio/gpio" + str(pin)
+    if not os.path.isdir(base):
+        with open("/sys/class/gpio/export", "w", encoding="ascii") as target:
+            target.write(str(pin))
+    direction_path = base + "/direction"
+    with open(direction_path, "w", encoding="ascii") as target:
+        target.write("in" if direction == "input" else "out")
+    if direction == "output":
+        with open(base + "/value", "w", encoding="ascii") as target:
+            target.write(str(value))
+
+def state(strings):
+    result = {}
+    for string, (io_index, pin) in PINS.items():
+        configured = strings[string]
+        alarm_value = configured["alarmValue"]
+        normal_value = 1 - alarm_value
+        base = "/sys/class/gpio/gpio" + str(pin)
+        direction = read_file(base + "/direction")
+        value = read_file(base + "/value")
+        live_value = int(value) if value in ("0", "1") else None
+        result[string] = {
+            "stringIndex": int(string), "ioIndex": io_index, "gpioNumber": pin,
+            "alarmValue": alarm_value, "normalValue": normal_value,
+            "direction": configured["direction"], "alarm": False,
+            "alarmChannelId": "str" + string + "_string_alarm",
+            "desiredValue": normal_value if configured["direction"] == "output" else None,
+            "lastWrittenValue": live_value, "lastDirection": direction,
+            "lastError": None if os.path.isdir(base) else "GPIO is not exported",
+        }
+    return {"scriptPath": "/usr/local/sbin/maxiems-gpio", "strings": result}
+
+try:
+    strings = load_config()
+    if ACTION == "save":
+        request = json.load(sys.stdin)
+        if not isinstance(request, dict):
+            raise ValueError("GPIO settings must be an object")
+        for string, field in (("1", "string1"), ("2", "string2")):
+            alarm = request.get(field + "AlarmValue")
+            direction = request.get(field + "Direction")
+            if alarm not in (0, 1) or isinstance(alarm, bool):
+                raise ValueError(field + "AlarmValue must be 0 or 1")
+            if direction not in ("input", "output"):
+                raise ValueError(field + "Direction must be input or output")
+            strings[string] = {"alarmValue": alarm, "direction": direction}
+        # Saving a setting immediately establishes the safe non-alarm output.
+        # A later BMS alarm writer can switch it to alarmValue.
+        for string, (_, pin) in PINS.items():
+            setting = strings[string]
+            apply(pin, setting["direction"], 1 - setting["alarmValue"])
+        save_config(strings)
+    print(json.dumps(state(strings), separators=(",", ":")))
+except (ValueError, OSError, json.JSONDecodeError) as error:
+    print("GPIO helper failed: " + str(error), file=sys.stderr)
+    sys.exit(1)
+' "$action"

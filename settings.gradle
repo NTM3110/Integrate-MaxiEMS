@@ -29,23 +29,22 @@ pluginManagement {
 }
 
 plugins {
-	id 'biz.aQute.bnd.workspace'
+	id 'biz.aQute.bnd.workspace' apply false
 }
 
 rootProject.name = 'openems'
 
-include ":io.openems.backend.application"
-include ":io.openems.backend.edge.application"
 include ":doc"
+include ":cnf"
 
-rootDir.eachDir { dir ->
-	// Kiểm tra nếu thư mục có chứa file bnd.bnd
-	if (new File(dir, 'bnd.bnd').exists()) {
-		include ":${dir.name}"
-	}
-}
+apply from: file('tools/workspace/settings-layout.gradle')
 
-// Nếu bạn có các thư mục con chứa bundle (như 'doc'), hãy thêm thủ công hoặc quét thêm
-if (new File(rootDir, "doc").exists()) {
-	include ":doc"
+gradle.projectsLoaded {
+	aQute.bnd.build.Workspace.setDriver('gradle')
+	aQute.bnd.build.Workspace.addGestalt('batch', null)
+	def workspace = new aQute.bnd.build.Workspace(new File(rootDir, '.bnd-workspace'), 'cnf')
+	workspace.setOffline(gradle.startParameter.offline)
+	gradle.rootProject.ext.bndWorkspace = workspace
+	gradle.rootProject.pluginManager.apply('biz.aQute.bnd.workspace')
+	gradle.buildFinished { workspace.close() }
 }

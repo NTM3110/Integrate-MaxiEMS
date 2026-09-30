@@ -1,0 +1,7 @@
+= io.openems.edge.network.manager
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.network.manager[Source Code icon:github[]]
+
+== Integration documentation
+
+* link:docs/ui-network-management.md[UI network-management workflow and API contract]

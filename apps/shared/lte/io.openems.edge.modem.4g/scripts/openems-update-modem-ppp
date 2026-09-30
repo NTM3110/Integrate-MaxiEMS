@@ -1,0 +1,69 @@
+#!/usr/bin/python3
+
+import base64
+import os
+from pathlib import Path
+import shlex
+import stat
+import sys
+import tempfile
+
+
+SCRIPT_PATH = Path("/etc/ppp/quectel-pppd.sh")
+KEYS = ("QL_APN", "QL_USER", "QL_PASSWORD")
+
+
+def fail(message: str) -> None:
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def decode_values() -> list[str]:
+    encoded_values = sys.stdin.buffer.read().splitlines()
+    if len(encoded_values) != len(KEYS):
+        fail("Expected exactly three modem configuration values")
+    values: list[str] = []
+    for encoded in encoded_values:
+        try:
+            value = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as error:
+            fail(f"Invalid modem configuration value: {error}")
+        if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+            fail("Control characters are not allowed in modem configuration")
+        values.append(value)
+    return values
+
+
+def main() -> None:
+    if len(sys.argv) != 1:
+        fail("This helper does not accept command-line arguments")
+    metadata = SCRIPT_PATH.lstat()
+    if not stat.S_ISREG(metadata.st_mode):
+        fail(f"Refusing to update non-regular file: {SCRIPT_PATH}")
+    values = decode_values()
+    lines = SCRIPT_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
+    managed_prefixes = tuple(f"{key}=" for key in KEYS)
+    content = "".join(line for line in lines if not line.startswith(managed_prefixes))
+    if content and not content.endswith("\n"):
+        content += "\n"
+    content += "".join(f"{key}={shlex.quote(value)}\n" for key, value in zip(KEYS, values))
+
+    file_descriptor, temporary_path = tempfile.mkstemp(prefix=".quectel-pppd.", dir=SCRIPT_PATH.parent)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as temporary_file:
+            temporary_file.write(content)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.chmod(temporary_path, stat.S_IMODE(metadata.st_mode))
+        os.chown(temporary_path, metadata.st_uid, metadata.st_gid)
+        os.replace(temporary_path, SCRIPT_PATH)
+    except BaseException:
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+if __name__ == "__main__":
+    main()

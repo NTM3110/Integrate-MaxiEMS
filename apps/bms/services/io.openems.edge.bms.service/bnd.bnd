@@ -1,0 +1,27 @@
+Bundle-Name: MaxiEMS BMS Service
+Bundle-Vendor: AT Energy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+# Contracts and models cross bundle boundaries; implementations stay private.
+Export-Package: \
+	io.openems.edge.bms.service.*.contracts,\
+	io.openems.edge.bms.service.*.model
+
+Private-Package: io.openems.edge.bms.service.*.implement,io.openems.edge.bms.service.*.implement.*
+
+-buildpath: \
+	${buildpath},\
+	com.zaxxer.HikariCP,\
+	io.openems.common,\
+	io.openems.edge.common,\
+	io.openems.edge.bridge.modbus,\
+	io.openems.edge.bms.huasu.ta,\
+	io.openems.edge.bms.huasu.tc,\
+	io.openems.edge.modem.4g,\
+	io.openems.j2mod,\
+	io.openems.edge.shared.postgresql,\
+	org.postgresql.jdbc,
+
+-testpath: \
+	${testpath}
