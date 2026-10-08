@@ -1,0 +1,17 @@
+﻿<UserControl x:Class="Maxiems.Deployer.App.Views.Operations.DashboardView"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" AutomationProperties.Name="{DynamicResource Dashboard.Automation}">
+	<ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="30" MaxWidth="980" HorizontalAlignment="Left">
+		<TextBlock Text="{DynamicResource Dashboard.Title}" Style="{DynamicResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+		<TextBlock Text="{DynamicResource Dashboard.Subtitle}" Style="{DynamicResource PageSubtitle}" />
+		<UniformGrid Columns="3">
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,12,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.Devices}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.Devices}" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,12,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.Ready}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.ReadyForWarehouse}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource SuccessBrush}"/></StackPanel></Border>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,0,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.Rework}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.ReworkRequired}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}"/></StackPanel></Border>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,12,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.ApprovedProfiles}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.ApprovedProfiles}" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,12,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.AllProfiles}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.Profiles}" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,0,0,12"><StackPanel><TextBlock Text="{DynamicResource Dashboard.Today}" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock Text="{Binding Counts.DeploymentsToday}" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+		</UniformGrid>
+		<TextBlock Text="{Binding Status}" Margin="0,10,0,0" Foreground="{DynamicResource TextSecondaryBrush}" AutomationProperties.LiveSetting="Polite" />
+	</StackPanel></ScrollViewer>
+</UserControl>

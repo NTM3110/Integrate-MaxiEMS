@@ -30,19 +30,17 @@ public class BmsModbusProcessImage implements ProcessImage {
 		if (count < 1 || count > MAX_READ_COUNT || offset < 0 || offset > Integer.MAX_VALUE - count) {
 			throw new IllegalAddressException("Invalid input register range");
 		}
-		var stringIndex = BmsModbusRegisterMapper.stringIndexForOffset(offset);
-		var endStringIndex = BmsModbusRegisterMapper.stringIndexForOffset(offset + count - 1);
+		var stringIndex = BmsMonitoringModbusMap.stringIndexForOffset(offset);
+		var endStringIndex = BmsMonitoringModbusMap.stringIndexForOffset(offset + count - 1);
 		if (stringIndex < 1 || stringIndex != endStringIndex) {
 			throw new IllegalAddressException("Input register range crosses string blocks");
 		}
-		var blockOffset = offset % BmsModbusRegisterMapper.STRING_STRIDE;
+		var blockOffset = offset % BmsMonitoringModbusMap.STRING_STRIDE;
 		var firstAddress = blockOffset + 1;
 		var lastAddress = firstAddress + count - 1;
-		var monitoring = BmsMonitoringModbusMap.isMonitoringAddress(firstAddress)
-				&& BmsMonitoringModbusMap.isMonitoringAddress(lastAddress);
-		if (BmsMonitoringModbusMap.isMonitoringAddress(firstAddress) != monitoring
-				|| BmsMonitoringModbusMap.isMonitoringAddress(lastAddress) != monitoring) {
-			throw new IllegalAddressException("Input register range crosses register contracts");
+		if (!BmsMonitoringModbusMap.isMonitoringAddress(firstAddress)
+				|| !BmsMonitoringModbusMap.isMonitoringAddress(lastAddress)) {
+			throw new IllegalAddressException("Unsupported BMS monitoring register range");
 		}
 
 		var result = new InputRegister[count];
@@ -51,24 +49,14 @@ public class BmsModbusProcessImage implements ProcessImage {
 			if (!frames.containsKey(stringIndex)) {
 				throw new IllegalAddressException("Monitoring provider for string " + stringIndex + " is not configured");
 			}
-			// Both register contracts capture the same provider reference exactly once.
+			// Capture one immutable provider frame for the complete FC4 request.
 			var frame = frames.get(stringIndex);
-			if (monitoring) {
-				var registers = BmsMonitoringModbusMap.registers(frame);
-				for (var i = 0; i < count; i++) {
-					var value = registers.get(firstAddress + i);
-					if (value == null) throw new IllegalArgumentException("Unsupported BMS monitoring address "
-							+ (firstAddress + i));
-					result[i] = new SimpleInputRegister(value);
-				}
-			} else {
-				// Legacy raw-current, string-SoH and extrema semantics remain unchanged.
-				var snapshot = frame == null ? null : frame.calculationSnapshot();
-				for (var i = 0; i < count; i++) {
-					var value = snapshot == null ? BmsModbusRegisterMapper.UNAVAILABLE
-							: BmsModbusRegisterMapper.registerFor(snapshot, blockOffset + i);
-					result[i] = new SimpleInputRegister(value);
-				}
+			var registers = BmsMonitoringModbusMap.registers(frame);
+			for (var i = 0; i < count; i++) {
+				var value = registers.get(firstAddress + i);
+				if (value == null) throw new IllegalArgumentException("Unsupported BMS monitoring address "
+						+ (firstAddress + i));
+				result[i] = new SimpleInputRegister(value);
 			}
 		} catch (IllegalArgumentException e) {
 			throw new IllegalAddressException(e.getMessage());

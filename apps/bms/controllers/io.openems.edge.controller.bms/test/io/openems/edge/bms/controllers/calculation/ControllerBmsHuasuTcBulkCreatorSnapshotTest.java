@@ -99,6 +99,43 @@ public class ControllerBmsHuasuTcBulkCreatorSnapshotTest {
 	}
 
 	@Test
+	public void cellProvenanceRetainsOriginalTimeAndRecoversOnTheNextCompleteRead() {
+		long measuredAt = 1_000L;
+		var previousCell = new BmsCalculationSnapshot.Cell(1, 2.2, 25.0, 1_800, 70.0, 90.0, null, null,
+				null, null, measuredAt, BmsCalculationSnapshot.CellQuality.FRESH);
+		var previous = new BmsCalculationSnapshot(UUID.randomUUID(), 1, 2_000L, 1, 25.0, 0.0, 2_000L,
+				BmsCalculationSnapshot.CurrentQuality.FRESH, null, 70.0, 90.0, 2.2, 1.1, 2.2, 25.0,
+				1_800.0, 2.2, 1, 2.2, 1, 25.0, 1, 25.0, 1, 1_800, 1, 1_800, 1,
+				Map.of(1, previousCell), null);
+
+		var firstFailure = ControllerBmsHuasuTcBulkCreatorImpl.cellProvenance(previous, 1, 3_000L, false);
+		assertEquals(Long.valueOf(measuredAt), firstFailure.measuredAt());
+		assertEquals(BmsCalculationSnapshot.CellQuality.RETAINED, firstFailure.quality());
+
+		var repeatedFailure = ControllerBmsHuasuTcBulkCreatorImpl.cellProvenance(previous, 1, 8_000L, false);
+		assertEquals(Long.valueOf(measuredAt), repeatedFailure.measuredAt());
+		assertEquals(BmsCalculationSnapshot.CellQuality.RETAINED, repeatedFailure.quality());
+
+		var recovery = ControllerBmsHuasuTcBulkCreatorImpl.cellProvenance(previous, 1, 9_000L, true);
+		assertEquals(Long.valueOf(9_000L), recovery.measuredAt());
+		assertEquals(BmsCalculationSnapshot.CellQuality.FRESH, recovery.quality());
+
+		var noHistory = ControllerBmsHuasuTcBulkCreatorImpl.cellProvenance(null, 1, 9_000L, false);
+		assertNull(noHistory.measuredAt());
+		assertEquals(BmsCalculationSnapshot.CellQuality.UNAVAILABLE, noHistory.quality());
+
+		var incompleteCell = new BmsCalculationSnapshot.Cell(1, 2.2, null, 1_800, null, null, null, null,
+				null, null, measuredAt, BmsCalculationSnapshot.CellQuality.RETAINED);
+		var incompleteHistory = new BmsCalculationSnapshot(UUID.randomUUID(), 2, 2_000L, 1, 25.0, 0.0,
+				2_000L, BmsCalculationSnapshot.CurrentQuality.FRESH, null, null, null, 2.2, 1.1, 2.2,
+				25.0, 1_800.0, 2.2, 1, 2.2, 1, 25.0, 1, 25.0, 1, 1_800, 1, 1_800, 1,
+				Map.of(1, incompleteCell), null);
+		var incomplete = ControllerBmsHuasuTcBulkCreatorImpl.cellProvenance(incompleteHistory, 1, 10_000L, false);
+		assertNull(incomplete.measuredAt());
+		assertEquals(BmsCalculationSnapshot.CellQuality.UNAVAILABLE, incomplete.quality());
+	}
+
+	@Test
 	public void preGenerationCurrentIsRetainedEvenWithoutPreviousSnapshot() {
 		var value = new Value<Integer>(null, -500);
 		var measuredAt = measuredAt(value);

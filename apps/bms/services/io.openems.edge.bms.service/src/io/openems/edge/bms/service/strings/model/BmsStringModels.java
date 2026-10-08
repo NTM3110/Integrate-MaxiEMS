@@ -33,10 +33,18 @@ public final class BmsStringModels {
 
 	public record CellData(int cellId, Double voltage, Double temperature, Integer internalResistance, Double soc,
 			Double soh, Double ir, String availabilityWarning, EstimatorProvenance socEstimator,
-			EstimatorProvenance sohEstimator) {
+			EstimatorProvenance sohEstimator, Long measuredAtEpochMs, Long ageMs, String quality) {
+		public CellData(int cellId, Double voltage, Double temperature, Integer internalResistance, Double soc,
+				Double soh, Double ir, String availabilityWarning, EstimatorProvenance socEstimator,
+				EstimatorProvenance sohEstimator) {
+			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning,
+					socEstimator, sohEstimator, null, null, "UNAVAILABLE");
+		}
+
 		public CellData(int cellId, Double voltage, Double temperature, Integer internalResistance, Double soc,
 				Double soh, Double ir, String availabilityWarning) {
-			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning, null, null);
+			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning, null, null,
+					null, null, "UNAVAILABLE");
 		}
 	}
 

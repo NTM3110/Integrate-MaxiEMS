@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly COMMON='/usr/local/libexec/maxiems-helper-common'
+readonly OPS='/usr/local/libexec/maxiems-deploy-ops'
+# shellcheck source=/dev/null
+source "$COMMON"
+require_root
+
+readonly operation="${1:-}"
+case "$operation" in
+	install-prerequisites)
+		require_arg_count 1 "$#"
+		;;
+	runtime-config|bms-ready)
+		require_arg_count 1 "$#"
+		;;
+	bms-setup)
+		require_arg_count 2 "$#"
+		[[ "$2" == 'real' || "$2" == 'demo' ]] || die 'invalid BMS deployment profile'
+		;;
+	bootstrap-status)
+		require_arg_count 1 "$#"
+		;;
+	current-release)
+		require_arg_count 1 "$#"
+		;;
+	bootstrap-config)
+		require_arg_count 3 "$#"
+		validate_upload_token "$2"
+		validate_sha256 "$3"
+		;;
+	begin)
+		require_arg_count 2 "$#"
+		validate_release_id "$2"
+		;;
+	quiesce-legacy)
+		require_arg_count 2 "$#"
+		validate_release_id "$2"
+		;;
+	stage)
+		require_arg_count 4 "$#"
+		validate_release_id "$2"
+		validate_upload_token "$3"
+		validate_sha256 "$4"
+		;;
+	activate|commit|abort|rollback|transaction-status)
+		require_arg_count 2 "$#"
+		validate_release_id "$2"
+		;;
+	service)
+		require_arg_count 2 "$#"
+		[[ "$2" == 'start' || "$2" == 'stop' || "$2" == 'restart' ]] || die 'invalid service action'
+		;;
+	nginx)
+		require_arg_count 2 "$#"
+		[[ "$2" == 'validate' || "$2" == 'reload' ]] || die 'invalid nginx action'
+		;;
+	tailscale)
+		require_arg_count 2 "$#"
+		[[ "$2" == 'status' || "$2" == 'up' || "$2" == 'down' ]] || die 'invalid tailscale action'
+		;;
+	status|diagnostics)
+		require_arg_count 1 "$#"
+		;;
+	reboot)
+		require_arg_count 1 "$#"
+		;;
+	*)
+		die 'unknown deploy operation'
+		;;
+esac
+
+# Rollback may delete the release directory from which an operator invoked us.
+# Run every child process from a stable directory so systemctl/SysV hooks can
+# resolve their working directory throughout the transaction.
+cd /
+exec "$OPS" "$@"

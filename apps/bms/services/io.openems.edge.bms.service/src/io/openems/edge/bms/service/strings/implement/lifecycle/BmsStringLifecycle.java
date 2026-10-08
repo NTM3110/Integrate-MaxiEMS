@@ -47,11 +47,10 @@ public class BmsStringLifecycle {
 	private BmsStringReadinessDiagnostics readinessDiagnostics;
 
 	public synchronized Definition create(Definition request) throws Exception {
-		var index = request.stringIndex() > 0 ? request.stringIndex() : this.nextIndex();
-		var definition = new Definition(index, request.stringName(), request.cellQty(), request.cellBrand(), request.cellModel(),
-				request.ratedCapacity(), request.cutoffVoltage(), request.floatVoltage(), request.boostVoltage(), request.rNew(),
-				request.highResistanceThreshold(), request.highTemperatureThreshold(), request.lowVoltageThreshold(),
-				request.highVoltageThreshold(), request.bridgeId(), request.startTaUnitId(), request.socCheckpointPolicy());
+		if (request.stringIndex() < 1) {
+			throw new IllegalArgumentException("String ID must use a positive index, for example str1");
+		}
+		var definition = withStringName(request, "str" + request.stringIndex());
 		this.validate(definition);
 		this.readinessDiagnostics.start("CREATE", definition, Set.of());
 		return this.createComponents(definition);
@@ -98,21 +97,30 @@ public class BmsStringLifecycle {
 			throw new IllegalArgumentException("String index is required for an update");
 		}
 		var previous = this.get(request.stringIndex());
-		this.validateUpdate(request);
-		if (request.startTaUnitId() != previous.startTaUnitId()) {
+		var definition = withStringName(request, previous.stringName());
+		this.validateUpdate(definition);
+		if (definition.startTaUnitId() != previous.startTaUnitId()) {
 			throw new IllegalArgumentException("Changing the TA Modbus start unit ID is not supported");
 		}
-		this.validateAllocation(request, request.stringIndex());
-		var plan = this.reconciliationPlan(request);
-		this.readinessDiagnostics.start("UPDATE", request, plan.retainedComponentIds());
+		this.validateAllocation(definition, definition.stringIndex());
+		var plan = this.reconciliationPlan(definition);
+		this.readinessDiagnostics.start("UPDATE", definition, plan.retainedComponentIds());
 		try {
 			this.apply(plan);
-			this.readinessDiagnostics.configAdminCompleted(request.stringIndex());
-			return request;
+			this.readinessDiagnostics.configAdminCompleted(definition.stringIndex());
+			return definition;
 		} catch (Exception updateError) {
-			this.readinessDiagnostics.failed(request.stringIndex());
+			this.readinessDiagnostics.failed(definition.stringIndex());
 			throw updateError;
 		}
+	}
+
+	private static Definition withStringName(Definition request, String stringName) {
+		return new Definition(request.stringIndex(), stringName, request.cellQty(), request.cellBrand(),
+				request.cellModel(), request.ratedCapacity(), request.cutoffVoltage(), request.floatVoltage(),
+				request.boostVoltage(), request.rNew(), request.highResistanceThreshold(),
+				request.highTemperatureThreshold(), request.lowVoltageThreshold(), request.highVoltageThreshold(),
+				request.bridgeId(), request.startTaUnitId(), request.socCheckpointPolicy());
 	}
 
 	private ReconciliationPlan reconciliationPlan(Definition definition) throws Exception {
@@ -292,6 +300,7 @@ public class BmsStringLifecycle {
 		if (definition.cellQty() < 1 || definition.cellQty() > 200) throw new IllegalArgumentException("Cell quantity must be between 1 and 200");
 		if (definition.bridgeId() == null || definition.bridgeId().isBlank()) throw new IllegalArgumentException("A dedicated Modbus bridge is required");
 		if (definition.startTaUnitId() < 1 || definition.startTaUnitId() + definition.cellQty() - 1 > 247) throw new IllegalArgumentException("TA Modbus unit range is invalid");
+		this.rejectReservedBridge(definition.bridgeId());
 	}
 
 	public synchronized void delete(int stringIndex) throws Exception {
@@ -413,9 +422,23 @@ public class BmsStringLifecycle {
 		if (definition.cellQty() < 1 || definition.cellQty() > 200) throw new IllegalArgumentException("Cell quantity must be between 1 and 200");
 		if (definition.bridgeId() == null || definition.bridgeId().isBlank()) throw new IllegalArgumentException("A dedicated Modbus bridge is required");
 		if (definition.startTaUnitId() < 1 || definition.startTaUnitId() + definition.cellQty() - 1 > 247) throw new IllegalArgumentException("TA Modbus unit range is invalid");
-		if (this.list().stream().anyMatch(value -> value.stringIndex() == definition.stringIndex())) throw new IllegalArgumentException("String " + definition.stringIndex() + " already exists");
+		if (this.list().stream().anyMatch(value -> value.stringIndex() == definition.stringIndex())) throw new IllegalArgumentException("String ID str" + definition.stringIndex() + " already exists");
+		this.rejectReservedBridge(definition.bridgeId());
 
 		this.validateAllocation(definition, null);
+	}
+
+	private void rejectReservedBridge(String bridgeId) throws Exception {
+		var bridges = this.configurationAdmin.listConfigurations("(&(" + ConfigurationAdmin.SERVICE_FACTORYPID
+				+ "=Bridge.Modbus.Serial)(id=" + bridgeId.replace("\\", "\\5c").replace("*", "\\2a")
+						.replace("(", "\\28").replace(")", "\\29") + "))");
+		if (bridges == null) return;
+		for (var bridge : bridges) {
+			var properties = bridge.getProperties();
+			if (properties != null && !string(properties.get("maxiems.modbusServerReservedBy")).isBlank()) {
+				throw new IllegalStateException("Bridge [" + bridgeId + "] is reserved by the BMS Modbus Server");
+			}
+		}
 	}
 
 	private void validateAllocation(Definition definition, Integer excludedStringIndex) throws Exception {
@@ -444,10 +467,6 @@ public class BmsStringLifecycle {
 		var id = string(properties.get("id"));
 		return id.equals("bmsHuasuTc-" + stringId) || id.equals("ctrlBmsHuasuCalc-" + stringId)
 				|| id.startsWith("bmsHuasuTa-" + stringId + "-cell");
-	}
-
-	private int nextIndex() throws Exception {
-		return this.list().stream().mapToInt(Definition::stringIndex).max().orElse(0) + 1;
 	}
 
 	private static Dictionary<String, Object> componentProperties(String pid, String id, String alias, String bridgeId,

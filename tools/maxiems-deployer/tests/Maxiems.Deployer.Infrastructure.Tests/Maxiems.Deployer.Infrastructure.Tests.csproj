@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Maxiems.Deployer.Infrastructure.Tests</RootNamespace>
+    <AssemblyName>Maxiems.Deployer.Infrastructure.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MSTest" />
+    <ProjectReference Include="../../src/Maxiems.Deployer.Infrastructure/Maxiems.Deployer.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../fixtures/manufacturing-profile.example.v1.json"
+          Link="fixtures/manufacturing-profile.example.v1.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../schemas/manufacturing-profile.v1.schema.json"
+          Link="schemas/manufacturing-profile.v1.schema.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../schemas/maxiems-release.v1.schema.json"
+          Link="schemas/maxiems-release.v1.schema.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

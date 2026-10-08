@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "node": {
+    "version": "24.18.0",
+    "releaseLine": "Krypton LTS",
+    "baseUrl": "https://nodejs.org/dist/v24.18.0",
+    "signedChecksums": "SHASUMS256.txt.asc",
+    "releaseKeyCommit": "b28073028e6d6855cfb53bf7fa0137599c01f967",
+    "releaseKeySha256": "8e6f89521a0694e445f42decd022f48369c634f1b5bcb5975135b69c88629ae8",
+    "artifacts": {
+      "amd64": {
+        "file": "node-v24.18.0-linux-x64.tar.xz",
+        "sha256": "55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742"
+      },
+      "arm64": {
+        "file": "node-v24.18.0-linux-arm64.tar.xz",
+        "sha256": "58c9520501f6ae2b52d5b210444e24b9d0c029a58c5011b797bc1fe7105886f6"
+      }
+    }
+  },
+  "tailscale": {
+    "channel": "stable",
+    "distribution": "noble",
+    "keyUrl": "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg",
+    "keySha256": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
+    "repository": "https://pkgs.tailscale.com/stable/ubuntu noble main"
+  }
+}

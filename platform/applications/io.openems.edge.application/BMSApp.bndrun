@@ -7,8 +7,8 @@
 # Dedicated BMS development runtime. Keep it separate from EdgeApp and its
 # operational config/data directory; see apps/bms/README.md before starting.
 -runproperties: \
-	org.osgi.service.http.port=8081,\
-	org.apache.felix.http.host=127.0.0.1,\
+	org.osgi.service.http.port=8080,\
+	org.apache.felix.http.host=0.0.0.0,\
 	felix.cm.dir=config-bms,\
 	openems.data.dir=data-bms,\
 	org.apache.felix.eventadmin.Timeout=0,\
@@ -49,6 +49,7 @@
 	bnd.identity;id='io.openems.edge.core',\
 	bnd.identity;id='io.openems.edge.bridge.modbus',\
 	bnd.identity;id='io.openems.edge.controller.api.websocket',\
+	bnd.identity;id='io.openems.edge.controller.api.rest',\
 	bnd.identity;id='io.openems.edge.scheduler.allalphabetically',\
 	bnd.identity;id='io.openems.edge.bms.huasu.ta',\
 	bnd.identity;id='io.openems.edge.bms.huasu.tc',\
@@ -140,4 +141,5 @@
 	org.postgresql.jdbc;version='[42.7.10,42.7.11)',\
 	rrd4j;version='[3.10.0,3.10.1)',\
 	stax2-api;version='[4.2.2,4.2.3)',\
-	org.owasp.encoder;version='[1.4.0,1.4.1)'
+	org.owasp.encoder;version='[1.4.0,1.4.1)',\
+	io.openems.edge.controller.api.rest;version=snapshot

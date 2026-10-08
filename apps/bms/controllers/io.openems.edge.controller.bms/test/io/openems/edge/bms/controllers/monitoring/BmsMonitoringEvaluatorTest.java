@@ -15,6 +15,7 @@ import org.junit.Test;
 
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.CurrentQuality;
+import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.CellQuality;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.EstimatorProvenance;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.EstimatorQuality;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.EstimatorReferenceIdentity;
@@ -22,6 +23,8 @@ import io.openems.edge.bms.service.monitoring.model.ActiveCalibrationContext;
 import io.openems.edge.bms.service.monitoring.model.BmsCurrentDirectionMapping;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.Alarm;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.AlarmEvaluation;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringModbusMap;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeEvidence;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeSource;
@@ -180,6 +183,97 @@ public class BmsMonitoringEvaluatorTest {
 	}
 
 	@Test
+	public void failedCellIsRetainedOnlyInsideTheFreshnessWindow() {
+		long now = 1_000_000L;
+		long measuredAt = now - 59_999L;
+		var source = withFirstCell(snapshot(now, 210.0, 0.1, 1_800, 95.0), measuredAt,
+				CellQuality.RETAINED, "MODBUS_COMMUNICATION_FAILED");
+		var frame = BmsMonitoringEvaluator.evaluate("str1", source, baseline(), ActiveCalibrationContext.none(),
+				BmsMonitoringPolicy.defaults(), BmsCurrentDirectionMapping.NEGATIVE,
+				mode(source, OperatingMode.IDLE), now);
+
+		assertEquals(CellMeasurementQuality.RETAINED, frame.cells().get(1).quality());
+		assertEquals(Long.valueOf(59_999L), frame.cells().get(1).ageMs());
+		assertEquals(Double.valueOf(1.8), frame.cells().get(1).voltageV());
+		assertEquals(CellMeasurementQuality.FRESH, frame.cells().get(2).quality());
+		assertEquals(Double.valueOf(1.9), frame.cells().get(2).voltageV());
+		assertTrue(frame.activeAlarms().contains(Alarm.SENSOR_MODULE_FAILURE));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.LOW_CELL_VOLTAGE));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.CELL_RESISTANCE));
+	}
+
+	@Test
+	public void failedCellExpiresAtTheFreshnessBoundaryWithoutHidingHealthyCells() {
+		long now = 1_000_000L;
+		var source = withFirstCell(snapshot(now, 210.0, 0.1, 1_800, 95.0), now - 60_000L,
+				CellQuality.RETAINED, "MODBUS_COMMUNICATION_FAILED");
+		var frame = BmsMonitoringEvaluator.evaluate("str1", source, baseline(), ActiveCalibrationContext.none(),
+				BmsMonitoringPolicy.defaults(), BmsCurrentDirectionMapping.NEGATIVE,
+				mode(source, OperatingMode.IDLE), now);
+
+		assertEquals(CellMeasurementQuality.STALE, frame.cells().get(1).quality());
+		assertNull(frame.cells().get(1).voltageV());
+		assertNull(frame.cells().get(1).temperatureC());
+		assertNull(frame.cells().get(1).resistanceUohm());
+		assertEquals(CellMeasurementQuality.FRESH, frame.cells().get(2).quality());
+		assertEquals(Double.valueOf(1.9), frame.cells().get(2).voltageV());
+		assertEquals(Double.valueOf(210.0), frame.string().batteryVoltageV());
+		assertEquals(Double.valueOf(105.0), frame.string().midpointVoltageV());
+		assertEquals(Double.valueOf(25.0), frame.string().ambientTemperatureC());
+		assertEquals(AlarmEvaluation.UNAVAILABLE, frame.alarmEvaluations().get(Alarm.LOW_CELL_VOLTAGE));
+		assertEquals(AlarmEvaluation.UNAVAILABLE, frame.alarmEvaluations().get(Alarm.HIGH_CELL_VOLTAGE));
+		assertEquals(AlarmEvaluation.UNAVAILABLE, frame.alarmEvaluations().get(Alarm.CELL_RESISTANCE));
+		assertEquals(AlarmEvaluation.UNAVAILABLE, frame.alarmEvaluations().get(Alarm.CELL_TEMPERATURE));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.BATTERY_VOLTAGE_LOW));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.BATTERY_VOLTAGE_HIGH));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.MIDPOINT_VOLTAGE));
+		assertEquals(AlarmEvaluation.AVAILABLE, frame.alarmEvaluations().get(Alarm.HIGH_AMBIENT_TEMPERATURE));
+		var registers = BmsMonitoringModbusMap.registers(frame);
+		assertEquals(Alarm.SENSOR_MODULE_FAILURE.mask(),
+				registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		var validity = registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS);
+		assertEquals(0, validity & Alarm.LOW_CELL_VOLTAGE.mask());
+		assertEquals(0, validity & Alarm.HIGH_CELL_VOLTAGE.mask());
+		assertEquals(0, validity & Alarm.CELL_RESISTANCE.mask());
+		assertEquals(0, validity & Alarm.CELL_TEMPERATURE.mask());
+		assertTrue((validity & Alarm.BATTERY_VOLTAGE_LOW.mask()) != 0);
+		assertTrue((validity & Alarm.BATTERY_VOLTAGE_HIGH.mask()) != 0);
+		assertTrue((validity & Alarm.MIDPOINT_VOLTAGE.mask()) != 0);
+		assertTrue((validity & Alarm.SENSOR_MODULE_FAILURE.mask()) != 0);
+		assertEquals(210, signed32(registers, 1) / 100);
+		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, signed32(registers, 11));
+	}
+
+	@Test
+	public void unavailableCellQualityRaisesSensorFailureWithoutAWarningString() {
+		long now = 1_000_000L;
+		var source = withFirstCell(snapshot(now, 210.0, 0.1, 1_800, 95.0), now,
+				CellQuality.UNAVAILABLE, null);
+		var frame = BmsMonitoringEvaluator.evaluate("str1", source, baseline(), ActiveCalibrationContext.none(),
+				BmsMonitoringPolicy.defaults(), BmsCurrentDirectionMapping.NEGATIVE,
+				mode(source, OperatingMode.IDLE), now);
+
+		assertEquals(CellMeasurementQuality.UNAVAILABLE, frame.cells().get(1).quality());
+		assertTrue(frame.activeAlarms().contains(Alarm.SENSOR_MODULE_FAILURE));
+		assertEquals(AlarmEvaluation.AVAILABLE,
+				frame.alarmEvaluations().get(Alarm.SENSOR_MODULE_FAILURE));
+	}
+
+	@Test
+	public void recoveredCellBecomesFreshAndClearsLiveSensorFailure() {
+		long now = 1_000_000L;
+		var source = withFirstCell(snapshot(now, 210.0, 0.1, 1_800, 95.0), now,
+				CellQuality.FRESH, null);
+		var frame = BmsMonitoringEvaluator.evaluate("str1", source, baseline(), ActiveCalibrationContext.none(),
+				BmsMonitoringPolicy.defaults(), BmsCurrentDirectionMapping.NEGATIVE,
+				mode(source, OperatingMode.IDLE), now);
+
+		assertEquals(CellMeasurementQuality.FRESH, frame.cells().get(1).quality());
+		assertEquals(Long.valueOf(0), frame.cells().get(1).ageMs());
+		assertFalse(frame.activeAlarms().contains(Alarm.SENSOR_MODULE_FAILURE));
+	}
+
+	@Test
 	public void freshRetainedCurrentDoesNotCreateSensorFailure() {
 		long now = 1_000_000L;
 		var source = snapshot(now, 210.0, 0.1, 1_800, 95.0);
@@ -289,6 +383,32 @@ public class BmsMonitoringEvaluatorTest {
 		return new BmsCalculationSnapshot(UUID.randomUUID(), 7, capturedAt, 2, 25.0, current, capturedAt,
 				CurrentQuality.FRESH, null, 60.5, 90.0, voltage, voltage / 2.0, 1.85, 25.0, 2_050.0,
 				1.9, 2, 1.8, 1, 25.0, 1, 25.0, 1, firstResistance, 1, 1_800, 2, cells, null);
+	}
+
+	private static BmsCalculationSnapshot withFirstCell(BmsCalculationSnapshot source, long measuredAt,
+			CellQuality quality, String warning) {
+		var cells = new java.util.LinkedHashMap<>(source.cells());
+		var first = cells.get(1);
+		cells.put(1, new BmsCalculationSnapshot.Cell(first.cellId(), first.voltage(), first.temperature(),
+				first.internalResistance(), first.soc(), first.soh(), first.ir(), warning, first.socEstimator(),
+				first.sohEstimator(), measuredAt, quality));
+		var second = cells.get(2);
+		cells.put(2, new BmsCalculationSnapshot.Cell(second.cellId(), second.voltage(), second.temperature(),
+				second.internalResistance(), second.soc(), second.soh(), second.ir(), second.availabilityWarning(),
+				second.socEstimator(), second.sohEstimator(), source.capturedAt(), CellQuality.FRESH));
+		return new BmsCalculationSnapshot(source.generation(), source.sequence(), source.capturedAt(),
+				source.configuredCellCount(), source.ambientTemperature(), source.stringCurrent(), source.currentMeasuredAt(),
+				source.currentQuality(), source.currentWarning(), source.stringSoc(), source.stringSoh(),
+				source.stringVoltage(), source.midpointVoltage(), source.averageVoltage(), source.averageTemperature(),
+				source.averageResistance(), source.maxVoltage(), source.maxVoltageCellIndex(), source.minVoltage(),
+				source.minVoltageCellIndex(), source.maxTemperature(), source.maxTemperatureCellIndex(),
+				source.minTemperature(), source.minTemperatureCellIndex(), source.maxResistance(),
+				source.maxResistanceCellIndex(), source.minResistance(), source.minResistanceCellIndex(), cells,
+				source.stringWarning(), source.socEstimator(), source.sohEstimator());
+	}
+
+	private static int signed32(Map<Integer, Integer> registers, int address) {
+		return registers.get(address) << 16 | registers.get(address + 1);
 	}
 
 	static InitialBaselineReferenceDataset baseline() {

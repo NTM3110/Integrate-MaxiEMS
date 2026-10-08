@@ -1,0 +1,304 @@
+<Window x:Class="Maxiems.Deployer.App.MainWindow"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:views="clr-namespace:Maxiems.Deployer.App.Views.Operations"
+		Title="MAXiEMS Deployer" Width="1180" Height="780" MinWidth="960" MinHeight="680"
+		Icon="Assets/AtEnergyFavicon.png" WindowStartupLocation="CenterScreen"
+		Background="{DynamicResource CanvasBrush}" FontFamily="Segoe UI Variable, Segoe UI"
+		AutomationProperties.Name="MAXiEMS deployment wizard">
+	<Window.Resources>
+		<ResourceDictionary>
+			<ResourceDictionary.MergedDictionaries>
+				<ResourceDictionary Source="Themes/DeployerTheme.xaml" />
+				<ResourceDictionary Source="Localization/Strings.en.xaml" />
+			</ResourceDictionary.MergedDictionaries>
+		</ResourceDictionary>
+	</Window.Resources>
+	<Window.InputBindings>
+		<KeyBinding Modifiers="Control" Key="N" Command="{Binding Shell.NewDeploymentCommand}" />
+		<KeyBinding Modifiers="Control" Key="O" Command="{Binding Shell.NavigateCommand}" CommandParameter="Profiles" />
+		<KeyBinding Modifiers="Control" Key="F" Command="{Binding Shell.FocusSearchCommand}" />
+		<KeyBinding Modifiers="Control" Key="OemComma" Command="{Binding Shell.OpenSettingsCommand}" />
+	</Window.InputBindings>
+	<Grid>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="252" />
+			<ColumnDefinition Width="*" />
+		</Grid.ColumnDefinitions>
+
+		<Border Background="{StaticResource BrandNavyBrush}" Padding="20,22" Visibility="Collapsed">
+			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="*" />
+					<RowDefinition Height="Auto" />
+				</Grid.RowDefinitions>
+				<Border Background="White" CornerRadius="9" Padding="14,11">
+					<Image Source="Assets/MAXiComLogo.png" Height="34" Stretch="Uniform" HorizontalAlignment="Left"
+							AutomationProperties.Name="MAXiCom" />
+				</Border>
+				<StackPanel Grid.Row="1" Margin="2,22,2,10">
+					<TextBlock Text="Deployment workflow" Foreground="#AAB5D1" FontSize="12" FontWeight="SemiBold" />
+					<TextBlock Text="Ubuntu Edge setup" Foreground="White" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,0" />
+				</StackPanel>
+				<StackPanel Grid.Row="2">
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="0"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#30439A"><TextBlock Text="1" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Target" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 1: Target" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="1"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#CB2634"><TextBlock Text="2" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Security" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 2: Security" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="2"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#30439A"><TextBlock Text="3" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Credentials" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 3: Credentials" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="3"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#30439A"><TextBlock Text="4" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Components" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 4: Components" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="4"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#30439A"><TextBlock Text="5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Review" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 5: Review" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="5"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#30439A"><TextBlock Text="6" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Deploy" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 6: Deploy" /></StackPanel>
+					</Border>
+					<Border>
+						<Border.Style><Style TargetType="Border" BasedOn="{StaticResource StepItem}"><Style.Triggers><DataTrigger Binding="{Binding CurrentPageIndex}" Value="6"><Setter Property="Background" Value="#26315D" /></DataTrigger><DataTrigger Binding="{Binding CurrentPageIndex}" Value="7"><Setter Property="Background" Value="#26315D" /></DataTrigger></Style.Triggers></Style></Border.Style>
+						<StackPanel Orientation="Horizontal"><Border Width="28" Height="28" CornerRadius="14" Background="#137A50"><TextBlock Text="7" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" /></Border><TextBlock Text="Result &amp; history" Foreground="White" Margin="11,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Step 7: Result and history" /></StackPanel>
+					</Border>
+				</StackPanel>
+				<Border Grid.Row="3" Background="#1B2652" CornerRadius="8" Padding="12">
+					<StackPanel>
+						<TextBlock Text="SECURE DEPLOYMENT" Foreground="#96A5CC" FontSize="11" FontWeight="Bold" />
+						<TextBlock Text="SSH trust verification and automatic rollback are always enabled." Foreground="#DEE4F4" FontSize="12" LineHeight="18" Margin="0,5,0,0" />
+					</StackPanel>
+				</Border>
+			</Grid>
+		</Border>
+
+		<Border Grid.Column="0" Background="{StaticResource BrandNavyBrush}" Padding="18,20">
+			<Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+				<Border Background="White" CornerRadius="9" Padding="13,10"><Image Source="Assets/MAXiComLogo.png" Height="32" Stretch="Uniform" HorizontalAlignment="Left" AutomationProperties.Name="MAXiCom"/></Border>
+				<StackPanel Grid.Row="1" Margin="2,18,2,12"><TextBlock Text="{DynamicResource Shell.Manufacturing}" Foreground="#96A5CC" FontSize="11" FontWeight="Bold"/><TextBlock Text="{DynamicResource Shell.EngineeringConsole}" Foreground="White" FontSize="17" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+				<StackPanel Grid.Row="2">
+					<Button Content="{DynamicResource Nav.Dashboard}" Command="{Binding Shell.NavigateCommand}" CommandParameter="Dashboard" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.DashboardAutomation}"/>
+					<Button Content="{DynamicResource Nav.Profiles}" Command="{Binding Shell.NavigateCommand}" CommandParameter="Profiles" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.ProfilesAutomation}"/>
+					<Button Content="{DynamicResource Nav.Devices}" Command="{Binding Shell.NavigateCommand}" CommandParameter="Devices" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.DevicesAutomation}"/>
+					<Button Content="{DynamicResource Nav.Deployments}" Command="{Binding Shell.NavigateCommand}" CommandParameter="Deployments" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.DeploymentsAutomation}"/>
+					<Button Content="{DynamicResource Nav.History}" Command="{Binding Shell.NavigateCommand}" CommandParameter="History" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.HistoryAutomation}"/>
+					<Button Content="{DynamicResource Nav.Settings}" Command="{Binding Shell.NavigateCommand}" CommandParameter="Settings" HorizontalContentAlignment="Left" AutomationProperties.Name="{DynamicResource Nav.SettingsAutomation}"/>
+				</StackPanel>
+				<StackPanel Grid.Row="3" Margin="2,0,2,12">
+					<Label x:Name="LanguageLabel" Target="{Binding ElementName=LanguageBox}" Content="{DynamicResource Language.Label}" Foreground="#DEE4F4" Padding="0,0,0,4"/>
+					<ComboBox x:Name="LanguageBox" ItemsSource="{Binding Shell.Languages}" SelectedItem="{Binding Shell.SelectedLanguage}" DisplayMemberPath="DisplayName" AutomationProperties.Name="{DynamicResource Language.Automation}"/>
+				</StackPanel>
+				<Border Grid.Row="4" Background="#1B2652" CornerRadius="8" Padding="12"><StackPanel><TextBlock Text="{DynamicResource Shell.EngineerMode}" Foreground="#96A5CC" FontSize="11" FontWeight="Bold"/><TextBlock Text="{DynamicResource Shell.NoLogin}" Foreground="#DEE4F4" TextWrapping="Wrap" FontSize="12" Margin="0,5,0,0"/></StackPanel></Border>
+			</Grid>
+		</Border>
+
+		<Grid Grid.Column="1" Margin="26,20,28,20" Visibility="Collapsed">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="*" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+			<Grid Margin="2,0,2,18">
+				<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+				<StackPanel>
+					<TextBlock Text="MAXiEMS Deployer" FontSize="22" FontWeight="SemiBold" />
+					<StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+						<Border Background="{StaticResource SuccessTintBrush}" CornerRadius="10" Padding="9,3"><TextBlock Text="Ubuntu 24.04 ready" Foreground="{StaticResource SuccessBrush}" FontSize="12" FontWeight="SemiBold" /></Border>
+						<TextBlock Text="One device · one verified release" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="10,3,0,0" />
+					</StackPanel>
+				</StackPanel>
+				<Button Grid.Column="1" Content="_Deployment history" Command="{Binding HistoryCommand}"
+						AutomationProperties.Name="Open deployment history" />
+			</Grid>
+
+		<Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="26">
+			<TabControl SelectedIndex="{Binding CurrentPageIndex}" BorderThickness="0" Background="Transparent">
+				<TabControl.ItemContainerStyle><Style TargetType="TabItem"><Setter Property="Visibility" Value="Collapsed" /></Style></TabControl.ItemContainerStyle>
+				<TabItem>
+					<ScrollViewer VerticalScrollBarVisibility="Auto">
+						<StackPanel MaxWidth="720" HorizontalAlignment="Left">
+							<TextBlock Text="Target device" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+							<TextBlock Text="Connect to the Ubuntu device through SSH. Only its public host key is read before you confirm trust."
+									Style="{StaticResource PageSubtitle}" />
+							<Border Style="{StaticResource MetricCard}" Margin="0,0,0,7">
+								<StackPanel><TextBlock Text="Connection endpoint" Style="{StaticResource SectionTitle}" /><TextBlock Text="Use a hostname or IP address reachable from this Windows computer." Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" /></StackPanel>
+							</Border>
+							<Label Target="{Binding ElementName=HostBox}" Content="_Host" />
+							<TextBox x:Name="HostBox" Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="SSH host" />
+							<Label Target="{Binding ElementName=PortBox}" Content="_Port" />
+							<TextBox x:Name="PortBox" Width="150" HorizontalAlignment="Left" Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="SSH port" />
+							<Button Margin="0,22,0,0" Content="_Connect safely" Click="Connect_Click" IsDefault="True"
+									Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" AutomationProperties.HelpText="Probe only the SSH host key" />
+						</StackPanel>
+					</ScrollViewer>
+				</TabItem>
+				<TabItem>
+					<ScrollViewer VerticalScrollBarVisibility="Auto">
+						<StackPanel MaxWidth="760" HorizontalAlignment="Left">
+							<TextBlock Text="Confirm SSH identity" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+							<TextBlock Text="Compare this fingerprint with the value supplied for the device before continuing."
+									Style="{StaticResource PageSubtitle}" />
+							<Border Background="{StaticResource WarningTintBrush}" BorderBrush="#E9BD72" BorderThickness="1" CornerRadius="8" Padding="15">
+								<TextBlock Text="{Binding TrustWarning}" Foreground="{StaticResource WarningBrush}" FontWeight="SemiBold"
+										AutomationProperties.LiveSetting="Assertive" />
+							</Border>
+							<Grid Margin="0,17,0,0">
+								<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+								<Border Style="{StaticResource MetricCard}" Margin="0,0,8,0"><StackPanel><TextBlock Text="Endpoint" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock FontWeight="SemiBold" Margin="0,5,0,0"><Run Text="{Binding TrustDecision.Endpoint.Host}" /><Run Text=":" /><Run Text="{Binding TrustDecision.Endpoint.Port}" /></TextBlock></StackPanel></Border>
+								<Border Grid.Column="1" Style="{StaticResource MetricCard}" Margin="8,0,0,0"><StackPanel><TextBlock Text="Key algorithm" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding TrustDecision.ObservedFingerprint.Algorithm}" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+							</Grid>
+							<TextBlock Text="Old fingerprint" FontWeight="SemiBold" Margin="0,17,0,5" />
+							<TextBlock Text="{Binding TrustDecision.PreviousFingerprint.Sha256Value}" TextWrapping="Wrap" FontFamily="Consolas" Foreground="{StaticResource TextSecondaryBrush}" />
+							<TextBlock Text="New fingerprint" FontWeight="SemiBold" Margin="0,14,0,5" />
+							<TextBlock Text="{Binding TrustDecision.ObservedFingerprint.Sha256Value}" TextWrapping="Wrap" FontFamily="Consolas" Foreground="{StaticResource BrandBlueBrush}" />
+							<CheckBox Margin="0,19,0,0" IsChecked="{Binding ReplacementRiskAcknowledged}" Content="I compared the endpoint and fingerprint and deliberately confirm this key" AutomationProperties.Name="Acknowledge SSH replacement risk" />
+							<StackPanel Orientation="Horizontal" Margin="0,20,0,0"><Button Content="_Reject" Click="RejectTrust_Click" Style="{StaticResource DangerButton}" /><Button Margin="10,0,0,0" Content="Confirm and _replace trust" Click="ConfirmTrust_Click" Style="{StaticResource PrimaryButton}" AutomationProperties.HelpText="Replaces a stored key only after explicit confirmation" /></StackPanel>
+						</StackPanel>
+					</ScrollViewer>
+				</TabItem>
+				<TabItem>
+					<ScrollViewer VerticalScrollBarVisibility="Auto">
+						<StackPanel MaxWidth="720" HorizontalAlignment="Left">
+							<TextBlock Text="Device access" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+							<TextBlock Text="For a new device, enter its Ubuntu login password once. MAXiEMS creates and remembers the secure key for later visits." Style="{StaticResource PageSubtitle}" />
+							<Border Style="{StaticResource MetricCard}" Margin="0,0,0,7"><StackPanel><TextBlock Text="Automatic worker pairing" Style="{StaticResource SectionTitle}" /><TextBlock Text="The temporary setup password is held in memory only, never saved, and cleared when this run finishes. Leave it blank when this computer has paired with the device before." Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" /></StackPanel></Border>
+							<Label Target="{Binding ElementName=UserBox}" Content="SSH _username" /><TextBox x:Name="UserBox" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
+							<Grid>
+								<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+								<StackPanel Margin="0,0,8,0"><Label Target="{Binding ElementName=BootstrapPasswordBox}" Content="Temporary SSH setup _password" /><PasswordBox x:Name="BootstrapPasswordBox" AutomationProperties.Name="Temporary SSH setup password" /></StackPanel>
+								<StackPanel Grid.Column="1" Margin="8,0,0,0"><Label Target="{Binding ElementName=AdminPasswordBox}" Content="OpenEMS _administrator password" /><PasswordBox x:Name="AdminPasswordBox" AutomationProperties.Name="OpenEMS administrator password" /></StackPanel>
+							</Grid>
+							<TextBlock Margin="0,8,0,0" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Text="For a new device, enter a non-empty OpenEMS administrator password. For an update, enter the device's current OpenEMS administrator password; it may be different from the temporary SSH password and from BMS admin/admin." />
+							<CheckBox Margin="0,18,0,0" Content="_Advanced technician mode" IsChecked="{Binding UseAdvancedAccess}" AutomationProperties.HelpText="Use a manually supplied SSH private key and component manifest" />
+							<Border Margin="0,12,0,0" Padding="15">
+								<Border.Style><Style TargetType="Border" BasedOn="{StaticResource MetricCard}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding UseAdvancedAccess}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style>
+								<StackPanel><TextBlock Text="Technician SSH key" Style="{StaticResource SectionTitle}" /><Label Target="{Binding ElementName=KeyPathBox}" Content="SSH private _key path" /><TextBox x:Name="KeyPathBox" Text="{Binding PrivateKeyPath, UpdateSourceTrigger=PropertyChanged}" /><Label Target="{Binding ElementName=KeyPassphraseBox}" Content="Key _passphrase (optional)" /><PasswordBox x:Name="KeyPassphraseBox" AutomationProperties.Name="Private key passphrase" /></StackPanel>
+							</Border>
+							<Button Margin="0,22,0,0" Content="_Next" Command="{Binding NextCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" />
+						</StackPanel>
+					</ScrollViewer>
+				</TabItem>
+				<TabItem>
+					<StackPanel MaxWidth="720" HorizontalAlignment="Left">
+						<TextBlock Text="Installation profile" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+						<TextBlock Text="Standard MAXiEMS is ready to use. Enable Modbus only when the site needs read-only TCP access." Style="{StaticResource PageSubtitle}" />
+						<Border Style="{StaticResource MetricCard}" Margin="0,0,0,7"><StackPanel><TextBlock Text="Standard MAXiEMS" Style="{StaticResource SectionTitle}" /><TextBlock Text="The app validates the selected profile before changing the device." Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" /></StackPanel></Border>
+						<CheckBox Margin="0,8,0,0" Content="Enable _Modbus TCP profile (port 502)" IsChecked="{Binding EnableModbusProfile}" />
+						<Border Margin="0,14,0,0" Padding="15">
+							<Border.Style><Style TargetType="Border" BasedOn="{StaticResource MetricCard}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding UseAdvancedAccess}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style>
+							<StackPanel><TextBlock Text="Custom technician profile" Style="{StaticResource SectionTitle}" /><Label Target="{Binding ElementName=ManifestBox}" Content="_Manifest path (optional)" /><TextBox x:Name="ManifestBox" Text="{Binding ManifestPath}" /></StackPanel>
+						</Border>
+						<CheckBox Margin="0,18,0,0" Content="Enable interactive _Tailscale login" IsChecked="{Binding EnableTailscale}" AutomationProperties.HelpText="Joins as a normal node without routes or exit-node settings" />
+						<Button Margin="0,22,0,0" Content="_Review" Command="{Binding NextCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" />
+					</StackPanel>
+				</TabItem>
+				<TabItem>
+					<StackPanel MaxWidth="760" HorizontalAlignment="Left">
+						<TextBlock Text="Review deployment" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+						<TextBlock Text="Confirm the target and release options. No credential or private-key material appears in this summary." Style="{StaticResource PageSubtitle}" />
+						<Grid>
+							<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+							<Grid.RowDefinitions><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+							<Border Style="{StaticResource MetricCard}" Margin="0,0,8,8"><StackPanel><TextBlock Text="Target" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding Host}" FontSize="16" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+							<Border Grid.Column="1" Style="{StaticResource MetricCard}" Margin="8,0,0,8"><StackPanel><TextBlock Text="SSH user" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding Username}" FontSize="16" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+							<Border Grid.Row="1" Style="{StaticResource MetricCard}" Margin="0,8,8,0"><StackPanel><TextBlock Text="Access" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding AccessModeSummary}" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+							<Border Grid.Row="1" Grid.Column="1" Style="{StaticResource MetricCard}" Margin="8,8,0,0"><StackPanel><TextBlock Text="Tailscale" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding EnableTailscale}" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+						</Grid>
+						<Border Style="{StaticResource MetricCard}" Margin="0,16,0,0"><StackPanel><TextBlock Text="Installation profile" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="{Binding ComponentProfileSummary}" FontWeight="SemiBold" Margin="0,5,0,0" /></StackPanel></Border>
+						<Border Background="{StaticResource BrandBlueTintBrush}" CornerRadius="8" Padding="15" Margin="0,18,0,0"><TextBlock Text="Rollback protection is active. If a required health check fails, the previous release is restored and verified." Foreground="{StaticResource BrandBlueBrush}" /></Border>
+						<Button Margin="0,22,0,0" Content="_Deploy" Click="Deploy_Click" IsDefault="True" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" />
+					</StackPanel>
+				</TabItem>
+				<TabItem>
+					<Grid>
+						<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+						<Grid>
+							<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+							<StackPanel><TextBlock Text="Deployment in progress" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" /><TextBlock Text="{Binding CurrentPhase, StringFormat=Current phase: {0}}" FontSize="16" FontWeight="SemiBold" AutomationProperties.Name="Current deployment phase" AutomationProperties.LiveSetting="Assertive" /><TextBlock Text="{Binding Elapsed, StringFormat=Elapsed: {0:hh\:mm\:ss}}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0" AutomationProperties.Name="Live deployment elapsed time" /></StackPanel>
+							<Border Grid.Column="1" Background="{StaticResource BrandBlueTintBrush}" CornerRadius="15" Padding="12,6" VerticalAlignment="Top"><TextBlock Text="RUNNING" Foreground="{StaticResource BrandBlueBrush}" FontSize="12" FontWeight="Bold" /></Border>
+						</Grid>
+						<Grid Grid.Row="1" Margin="0,18,0,16">
+							<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+							<Border Background="{StaticResource WarningTintBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,12"><StackPanel><TextBlock Text="{Binding TailscaleLoginUrl}" TextWrapping="Wrap" AutomationProperties.Name="Tailscale login URL" /><StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Button Content="_Open login URL" Click="OpenTailscale_Click" /><Button Margin="8,0,0,0" Content="_Copy URL" Click="CopyTailscale_Click" /></StackPanel></StackPanel></Border>
+							<DataGrid Grid.Row="1" ItemsSource="{Binding Timeline}" AutoGenerateColumns="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Phase" Binding="{Binding Phase}" /><DataGridTextColumn Header="Status" Binding="{Binding Outcome}" /><DataGridTextColumn Header="Started" Binding="{Binding StartedAt}" /><DataGridTextColumn Header="Ended" Binding="{Binding CompletedAt}" /><DataGridTextColumn Header="Duration" Binding="{Binding Duration}" /><DataGridTextColumn Header="Details" Binding="{Binding Message}" Width="*" /></DataGrid.Columns></DataGrid>
+						</Grid>
+						<Button Grid.Row="2" Content="_Cancel safely" Command="{Binding CancelCommand}" Style="{StaticResource DangerButton}" HorizontalAlignment="Left" />
+					</Grid>
+				</TabItem>
+				<TabItem>
+					<StackPanel MaxWidth="720" HorizontalAlignment="Left">
+						<Border Width="58" Height="58" CornerRadius="29" HorizontalAlignment="Left" Margin="0,0,0,18">
+							<Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{StaticResource DangerTintBrush}" /><Style.Triggers><DataTrigger Binding="{Binding FinalState}" Value="Succeeded"><Setter Property="Background" Value="{StaticResource SuccessTintBrush}" /></DataTrigger><DataTrigger Binding="{Binding FinalState}" Value="RolledBack"><Setter Property="Background" Value="{StaticResource WarningTintBrush}" /></DataTrigger><DataTrigger Binding="{Binding FinalState}" Value="Cancelled"><Setter Property="Background" Value="{StaticResource WarningTintBrush}" /></DataTrigger></Style.Triggers></Style></Border.Style>
+							<TextBlock Text="{Binding ResultGlyph}" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center">
+								<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource DangerBrush}" /><Style.Triggers><DataTrigger Binding="{Binding FinalState}" Value="Succeeded"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}" /></DataTrigger><DataTrigger Binding="{Binding FinalState}" Value="RolledBack"><Setter Property="Foreground" Value="{StaticResource WarningBrush}" /></DataTrigger><DataTrigger Binding="{Binding FinalState}" Value="Cancelled"><Setter Property="Foreground" Value="{StaticResource WarningBrush}" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+							</TextBlock>
+						</Border>
+						<TextBlock Text="{Binding ResultHeading}" Style="{StaticResource PageTitle}" AutomationProperties.Name="Deployment result" AutomationProperties.HeadingLevel="Level1" AutomationProperties.LiveSetting="Assertive" />
+						<TextBlock Text="{Binding ResultSummary}" Style="{StaticResource PageSubtitle}" />
+						<Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="{Binding ResultPanelHeading}" Style="{StaticResource SectionTitle}" /><TextBlock Text="{Binding ResultPanelSummary}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0" /></StackPanel></Border>
+						<Border Background="{StaticResource DangerTintBrush}" BorderBrush="#E9A5AA" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0">
+							<Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding ResultDetails}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding ResultDetails}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Border.Style>
+							<TextBlock Text="{Binding ResultDetails}" Foreground="{StaticResource DangerBrush}" FontWeight="SemiBold" AutomationProperties.Name="Deployment error detail" AutomationProperties.LiveSetting="Assertive" />
+						</Border>
+						<Button Margin="0,22,0,0" Content="Open _history" Command="{Binding HistoryCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" />
+					</StackPanel>
+				</TabItem>
+				<TabItem>
+					<Grid>
+						<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+						<StackPanel>
+							<TextBlock Text="Deployment history" Style="{StaticResource PageTitle}" AutomationProperties.HeadingLevel="Level1" />
+							<TextBlock Text="{Binding HistoryStatus}" Foreground="{StaticResource TextSecondaryBrush}" AutomationProperties.Name="Deployment history status" AutomationProperties.LiveSetting="Polite" />
+							<Grid Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions><StackPanel Margin="0,0,12,0"><Label Target="{Binding ElementName=HistorySearchBox}" Content="_Search by target or status" /><TextBox x:Name="HistorySearchBox" Text="{Binding HistorySearch, UpdateSourceTrigger=PropertyChanged}" /></StackPanel><StackPanel Grid.Column="1"><Label Target="{Binding ElementName=HistorySortBox}" Content="_Sort history" /><ComboBox x:Name="HistorySortBox" ItemsSource="{Binding HistorySortOptions}" SelectedItem="{Binding HistorySort}" /></StackPanel></Grid>
+						</StackPanel>
+						<ListView Grid.Row="1" Margin="0,16,0,0" ItemsSource="{Binding FilteredHistory}" SelectedItem="{Binding SelectedHistory}" MouseDoubleClick="History_DoubleClick" BorderBrush="{StaticResource BorderBrush}" AutomationProperties.Name="Completed deployment reports" AutomationProperties.HelpText="Double-click a completed deployment to open its HTML report"><ListView.InputBindings><KeyBinding Key="Enter" Command="{Binding OpenHistoryReportCommand}" /></ListView.InputBindings><ListView.View><GridView><GridViewColumn Header="Started" DisplayMemberBinding="{Binding StartedAt}" /><GridViewColumn Header="Target" DisplayMemberBinding="{Binding TargetDisplayName}" /><GridViewColumn Header="Status" DisplayMemberBinding="{Binding FinalState}" /><GridViewColumn Header="Release" DisplayMemberBinding="{Binding ReleaseId}" /></GridView></ListView.View></ListView>
+					</Grid>
+				</TabItem>
+			</TabControl>
+		</Border>
+
+		<Grid Grid.Row="2" Margin="2,14,2,0">
+			<Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+			<Border Background="{StaticResource DangerTintBrush}" CornerRadius="7" Padding="11,8" HorizontalAlignment="Left">
+				<Border.Style>
+					<Style TargetType="Border">
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding ValidationMessage}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+							<DataTrigger Binding="{Binding ValidationMessage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</Border.Style>
+				<TextBlock Text="{Binding ValidationMessage}" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" AutomationProperties.Name="Validation error" AutomationProperties.LiveSetting="Assertive" />
+			</Border>
+			<Button Grid.Column="1" Content="_Back" Command="{Binding BackCommand}" />
+		</Grid>
+		</Grid>
+		<views:DashboardView Grid.Column="1" DataContext="{Binding Shell.Dashboard}">
+			<views:DashboardView.Style><Style TargetType="views:DashboardView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="Dashboard"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:DashboardView.Style>
+		</views:DashboardView>
+		<views:ProfilesView Grid.Column="1" DataContext="{Binding Shell.Profiles}">
+			<views:ProfilesView.Style><Style TargetType="views:ProfilesView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="Profiles"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:ProfilesView.Style>
+		</views:ProfilesView>
+		<views:DevicesView Grid.Column="1" DataContext="{Binding Shell.Devices}">
+			<views:DevicesView.Style><Style TargetType="views:DevicesView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="Devices"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:DevicesView.Style>
+		</views:DevicesView>
+		<views:HistoryView Grid.Column="1" DataContext="{Binding Shell.History}">
+			<views:HistoryView.Style><Style TargetType="views:HistoryView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="History"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:HistoryView.Style>
+		</views:HistoryView>
+		<views:SettingsView Grid.Column="1" DataContext="{Binding Shell.Settings}">
+			<views:SettingsView.Style><Style TargetType="views:SettingsView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="Settings"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:SettingsView.Style>
+		</views:SettingsView>
+		<views:ManufacturingDeploymentView Grid.Column="1" DataContext="{Binding Shell.Deployment}">
+			<views:ManufacturingDeploymentView.Style><Style TargetType="views:ManufacturingDeploymentView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.Shell.CurrentSection, RelativeSource={RelativeSource AncestorType=Window}}" Value="Deployments"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></views:ManufacturingDeploymentView.Style>
+		</views:ManufacturingDeploymentView>
+	</Grid>
+</Window>

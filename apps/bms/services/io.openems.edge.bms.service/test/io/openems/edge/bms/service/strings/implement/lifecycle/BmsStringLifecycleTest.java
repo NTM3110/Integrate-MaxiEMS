@@ -47,6 +47,60 @@ public class BmsStringLifecycleTest {
 	}
 
 	@Test
+	public void createRequiresExplicitPositiveIndexAndRejectsDuplicateId() throws Exception {
+		var fixture = new Fixture();
+		var source = definition(1);
+		var invalid = new BmsStringModels.Definition(0, source.stringName(), source.cellQty(), source.cellBrand(),
+				source.cellModel(), source.ratedCapacity(), source.cutoffVoltage(), source.floatVoltage(),
+				source.boostVoltage(), source.rNew(), source.highResistanceThreshold(),
+				source.highTemperatureThreshold(), source.lowVoltageThreshold(), source.highVoltageThreshold(),
+				source.bridgeId(), source.startTaUnitId(), source.socCheckpointPolicy());
+
+		var missingId = assertThrows(IllegalArgumentException.class, () -> fixture.lifecycle.create(invalid));
+		assertTrue(missingId.getMessage().contains("positive index"));
+		assertEquals(0, fixture.admin.createdCount);
+
+		var created = fixture.lifecycle.create(source);
+		assertEquals("str1", created.stringName());
+		assertEquals("str1", fixture.admin.byId("bmsHuasuTc-str1").properties.get("maxiems.stringName"));
+		var duplicate = assertThrows(IllegalArgumentException.class, () -> fixture.lifecycle.create(source));
+		assertEquals("String ID str1 already exists", duplicate.getMessage());
+	}
+
+	@Test
+	public void createRejectsBridgeReservedByModbusServer() throws Exception {
+		var fixture = new Fixture();
+		var bridge = fixture.admin.create("Bridge.Modbus.Serial");
+		Dictionary<String, Object> properties = new Hashtable<>();
+		properties.put("id", "modbus0");
+		properties.put("maxiems.modbusServerReservedBy", "ctrlBmsModbusTcp0");
+		bridge.update(properties);
+
+		var error = assertThrows(IllegalStateException.class, () -> fixture.lifecycle.create(definition(1)));
+
+		assertTrue(error.getMessage().contains("reserved by the BMS Modbus Server"));
+		assertEquals(1, fixture.admin.configurations.size());
+	}
+
+	@Test
+	public void updateKeepsTheStoredLegacyName() throws Exception {
+		var fixture = seeded(1);
+		fixture.admin.byId("bmsHuasuTc-str1").properties.put("maxiems.stringName", "Legacy display name");
+		var source = definition(1);
+		var renameAttempt = new BmsStringModels.Definition(source.stringIndex(), "rename attempt", source.cellQty(),
+				source.cellBrand(), source.cellModel(), source.ratedCapacity(), source.cutoffVoltage(), source.floatVoltage(),
+				source.boostVoltage(), source.rNew(), source.highResistanceThreshold(), source.highTemperatureThreshold(),
+				source.lowVoltageThreshold(), source.highVoltageThreshold(), source.bridgeId(), source.startTaUnitId(),
+				source.socCheckpointPolicy());
+
+		var updated = fixture.lifecycle.update(renameAttempt);
+
+		assertEquals("Legacy display name", updated.stringName());
+		assertEquals("Legacy display name",
+				fixture.admin.byId("bmsHuasuTc-str1").properties.get("maxiems.stringName"));
+	}
+
+	@Test
 	public void updatePreservesExplicitLegacyRollbackMode() throws Exception {
 		var fixture = seeded(1);
 		var calculator = fixture.admin.byId("ctrlBmsHuasuCalc-str1");
@@ -202,13 +256,13 @@ public class BmsStringLifecycleTest {
 		var fixture = seeded(11);
 		fixture.admin.resetEvents();
 		var current = definition(11);
-		var renamed = new BmsStringModels.Definition(1, "Renamed", current.cellQty(), current.cellBrand(),
+		var metadataChanged = new BmsStringModels.Definition(1, current.stringName(), current.cellQty(), "Updated brand",
 				current.cellModel(), current.ratedCapacity(), current.cutoffVoltage(), current.floatVoltage(),
 				current.boostVoltage(), current.rNew(), current.highResistanceThreshold(),
 				current.highTemperatureThreshold(), current.lowVoltageThreshold(), current.highVoltageThreshold(),
 				current.bridgeId(), current.startTaUnitId());
 
-		fixture.lifecycle.update(renamed);
+		fixture.lifecycle.update(metadataChanged);
 
 		assertEquals(1, fixture.admin.byId("bmsHuasuTc-str1").updateCount);
 		assertEquals(0, fixture.admin.byId("ctrlBmsHuasuCalc-str1").updateCount);

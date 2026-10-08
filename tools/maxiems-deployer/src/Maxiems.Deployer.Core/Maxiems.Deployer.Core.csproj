@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Maxiems.Deployer.Core</RootNamespace>
+    <AssemblyName>Maxiems.Deployer.Core</AssemblyName>
+  </PropertyGroup>
+</Project>

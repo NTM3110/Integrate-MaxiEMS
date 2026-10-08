@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly SOURCE='/opt/maxiems/current/remote'
+readonly STATE='/var/lib/maxiems/state/runtime-config'
+[[ "$(/usr/bin/id -u)" == '0' ]] || exit 64
+[[ "$#" == '0' ]] || exit 64
+
+/usr/bin/install --directory --owner=root --group=root --mode=0700 "$STATE"
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$SOURCE/etc/systemd/system/maxiems-edge.service" "$STATE/maxiems-edge-candidate.service"
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$SOURCE/etc/nginx/sites-available/maxiems" "$STATE/maxiems.nginx.candidate"
+/usr/bin/systemd-analyze verify "$STATE/maxiems-edge-candidate.service"
+
+/usr/bin/printf '%s\n' \
+	'pid /run/nginx-maxiems-test.pid;' \
+	'error_log stderr;' \
+	'events {}' \
+	'http {' \
+	'  include /etc/nginx/mime.types;' \
+	"  include $STATE/maxiems.nginx.candidate;" \
+	'}' > "$STATE/nginx-test.conf"
+/usr/sbin/nginx -t -q -c "$STATE/nginx-test.conf"
+
+/usr/bin/install --directory --owner=openems --group=openems --mode=0750 \
+	/var/lib/maxiems/shared/config /var/lib/openems /var/lib/openems/data /var/lib/openems/osgi-cache /var/log/openems
+
+readonly unit_target='/etc/systemd/system/maxiems-edge.service'
+readonly nginx_target='/etc/nginx/sites-available/maxiems'
+readonly nginx_link='/etc/nginx/sites-enabled/maxiems'
+readonly default_link='/etc/nginx/sites-enabled/default'
+unit_existed=false
+unit_enabled=false
+nginx_existed=false
+default_existed=false
+[[ ! -e "$unit_target" ]] || { /usr/bin/cp -a -- "$unit_target" "$STATE/unit.backup"; unit_existed=true; }
+/usr/bin/systemctl is-enabled --quiet maxiems-edge.service 2>/dev/null && unit_enabled=true
+[[ ! -e "$nginx_target" ]] || { /usr/bin/cp -a -- "$nginx_target" "$STATE/nginx.backup"; nginx_existed=true; }
+[[ ! -e "$default_link" && ! -L "$default_link" ]] \
+	|| { /usr/bin/cp -a --no-dereference "$default_link" "$STATE/default.backup"; default_existed=true; }
+committed=false
+restore_last_good() {
+	if [[ "$committed" == 'true' ]]; then
+		return
+	fi
+	if [[ "$unit_existed" == 'true' ]]; then
+		/usr/bin/cp -a -- "$STATE/unit.backup" "$unit_target"
+	else
+		/usr/bin/rm -f -- "$unit_target"
+	fi
+	if [[ "$nginx_existed" == 'true' ]]; then
+		/usr/bin/cp -a -- "$STATE/nginx.backup" "$nginx_target"
+	else
+		/usr/bin/rm -f -- "$nginx_target"
+	fi
+	/usr/bin/rm -f -- "$nginx_link" "$default_link"
+	if [[ "$default_existed" == 'true' ]]; then
+		/usr/bin/cp -a --no-dereference "$STATE/default.backup" "$default_link"
+	fi
+	/usr/bin/systemctl daemon-reload
+	if [[ "$unit_enabled" == 'true' ]]; then
+		/usr/bin/systemctl enable maxiems-edge.service >/dev/null
+	else
+		/usr/bin/systemctl disable maxiems-edge.service >/dev/null 2>&1 || true
+	fi
+}
+trap restore_last_good EXIT
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$STATE/maxiems-edge-candidate.service" "$unit_target"
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$STATE/maxiems.nginx.candidate" "$nginx_target"
+/usr/bin/ln -sfn -- "$nginx_target" "$nginx_link"
+/usr/bin/rm -f -- "$default_link"
+# Retire the recognized old BMS site even when its legacy Java service is stopped.
+# The deployment transaction snapshots this link before activation.
+if [[ -e /etc/nginx/sites-enabled/maxicom || -L /etc/nginx/sites-enabled/maxicom ]]; then
+ [[ -L /etc/nginx/sites-enabled/maxicom && "$(/usr/bin/readlink -f /etc/nginx/sites-enabled/maxicom)" == /etc/nginx/sites-available/maxicom ]] || exit 65
+ /usr/bin/rm -- /etc/nginx/sites-enabled/maxicom
+fi
+/usr/bin/systemctl daemon-reload
+/usr/bin/systemctl enable maxiems-edge.service >/dev/null
+/usr/sbin/nginx -t
+committed=true
+trap - EXIT

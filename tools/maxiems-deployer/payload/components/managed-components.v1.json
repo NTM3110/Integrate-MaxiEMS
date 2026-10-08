@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "components": [
+    {
+      "factoryPid": "Controller.Api.Rest.ReadWrite",
+      "id": "ctrlApiRest0",
+      "updateOnly": true,
+      "properties": {
+        "enabled": true,
+        "bindAddress": "127.0.0.1",
+        "port": 8084
+      }
+    },
+    {
+      "factoryPid": "Controller.Api.Websocket",
+      "id": "ctrlApiWebsocket0",
+      "updateOnly": true,
+      "properties": {
+        "enabled": true,
+        "bindAddress": "0.0.0.0",
+        "port": 8085
+      }
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+#!/usr/bin/python3
+"""Provision local BMS database; table DDL remains owned by the backend migrations."""
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import pwd
+import secrets
+import subprocess
+import sys
+import time
+
+CONFIG = Path('/var/lib/maxiems/shared/config')
+STATE = Path('/var/lib/maxiems/state/bms')
+DB_PID = 'io.openems.edge.bms.platform.persistence.BmsDatabaseImpl'
+AUTH_PID = 'io.openems.edge.bms.platform.auth.PlatformAuthenticationServiceImpl'
+PROFILE_MARKER = 'deployment-profile'
+
+
+def sql(statement, database='postgres'):
+    result = subprocess.run(['/usr/sbin/runuser', '-u', 'postgres', '--', '/usr/bin/psql',
+                             '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-d', database],
+                            input=statement, text=True, capture_output=True, timeout=30)
+    if result.returncode:
+        # SQL and server diagnostics may contain credentials; do not put them in reports.
+        raise RuntimeError('PostgreSQL provisioning/readiness query failed')
+    return result.stdout.strip()
+
+
+def config_path(pid):
+    return CONFIG / (pid.replace('.', '/') + '.config')
+
+
+def write_config(pid, values, factory=None):
+    path = config_path(pid)
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    values = dict(values, **{'service.pid': pid, 'service.bundleLocation': '?'})
+    if factory:
+        values['service.factoryPid'] = factory
+    lines = [':org.apache.felix.configadmin.revision:=L"1"']
+    for key, value in values.items():
+        if isinstance(value, bool):
+            encoded = 'B"' + str(value).lower() + '"'
+        elif isinstance(value, int):
+            encoded = f'I"{value}"'
+        else:
+            encoded = '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('=', '\\=') + '"'
+        lines.append(key + '=' + encoded)
+    account = pwd.getpwnam('openems')
+    temporary = path.with_suffix('.pending')
+    with temporary.open('x') as stream:
+        stream.write('\n'.join(lines) + '\n')
+    os.chown(temporary, account.pw_uid, account.pw_gid)
+    os.chmod(temporary, 0o640)
+    temporary.replace(path)
+    # Parents created by this helper must remain traversable by ConfigAdmin.
+    parent = path.parent
+    while parent != CONFIG:
+        os.chown(parent, account.pw_uid, account.pw_gid)
+        os.chmod(parent, 0o750)
+        parent = parent.parent
+
+
+def seed_serial_bridges(profile):
+    paths = {'real': ['/dev/ttyS1', '/dev/ttyS7', '/dev/ttyS9'],
+             'demo': ['/dev/ttyBMS1', '/dev/ttyBMS3', '/dev/ttyBMS5']}[profile]
+    for index, port in enumerate(paths):
+        write_config(f'Bridge.Modbus.Serial.maxiems-modbus{index}', {
+            'id': f'modbus{index}', 'alias': f'BMS String {index + 1}', 'enabled': True,
+            'portName': port, 'baudRate': 9600, 'databits': 8, 'stopbits': 'ONE',
+            'parity': 'NONE', 'logVerbosity': 'NONE', 'invalidateElementsAfterReadErrors': 1,
+        }, 'Bridge.Modbus.Serial')
+
+
+def managed_serial_bridge_paths():
+    return [config_path(f'Bridge.Modbus.Serial.maxiems-modbus{index}') for index in range(3)]
+
+
+def setup(profile):
+    if profile not in ('real', 'demo'):
+        raise RuntimeError('Deployment profile must be real or demo')
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    secret = STATE / 'database.json'
+    marker = STATE / PROFILE_MARKER
+    fresh_install = not secret.exists()
+    if marker.exists() and marker.read_text().strip() != profile:
+        raise RuntimeError('Deployment profile differs from the installed profile; explicit migration is required')
+    bridges = managed_serial_bridge_paths()
+    existing_bridges = [path for path in bridges if path.exists()]
+    seed_topology = False
+    if not marker.exists():
+        if existing_bridges:
+            raise RuntimeError(
+                'Existing managed bridge configuration has no deployment profile; explicit migration is required')
+        seed_topology = True
+    if not secret.exists():
+        if config_path(DB_PID).exists() or list(CONFIG.glob('io/openems/edge/shared/postgresql/Connection/*.config')):
+            raise RuntimeError('Existing database configuration is unmanaged; explicit migration is required')
+        if sql("SELECT 1 FROM pg_roles WHERE rolname='maxiems_bms'") or sql("SELECT 1 FROM pg_database WHERE datname='bms'"):
+            raise RuntimeError('Existing bms database/role is unmanaged; refusing to replace credentials')
+        data = {'password': secrets.token_hex(32)}
+        with secret.open('x') as stream:
+            json.dump(data, stream)
+        os.chmod(secret, 0o600)
+    data = json.loads(secret.read_text())
+    password = data['password']
+    if len(password) != 64 or any(c not in '0123456789abcdef' for c in password):
+        raise RuntimeError('Invalid managed database credential state')
+    if not sql("SELECT 1 FROM pg_roles WHERE rolname='maxiems_bms'"):
+        sql("CREATE ROLE maxiems_bms LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '" + password + "'")
+    if not sql("SELECT 1 FROM pg_database WHERE datname='bms'"):
+        sql('CREATE DATABASE bms OWNER maxiems_bms')
+    if sql("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='bms'") != 'maxiems_bms':
+        raise RuntimeError('Managed database owner changed')
+    for pid, identifier in [('Core.AppManager', '_appManager'), ('Core.Cycle', '_cycle'),
+                            ('Core.Meta', '_meta'), ('Core.PredictorManager', '_predictorManager'),
+                            ('Core.Sum', '_sum')]:
+        write_config(pid, {'id': identifier})
+    write_config('Scheduler.AllAlphabetically.bms', {'id': 'scheduler0', 'enabled': True}, 'Scheduler.AllAlphabetically')
+    write_config(DB_PID, {'pgHost': '127.0.0.1', 'pgPort': 5432, 'database': 'bms',
+                         'pgUser': 'maxiems_bms', 'pgPassword': password, 'connectionPoolSize': 5})
+    write_config(AUTH_PID, {'bootstrapAdminUsername': 'admin', 'bootstrapAdminName': 'Administrator',
+                           'bootstrapAdminPassword': 'admin', 'importLegacyOpenmucAdministrator': False})
+    if seed_topology:
+        seed_serial_bridges(profile)
+    if not marker.exists():
+        marker.write_text(profile + '\n')
+        os.chmod(marker, 0o600)
+    disposition = 'bridge topology created' if seed_topology else 'existing bridge topology preserved'
+    print(f'BMS database/configuration provisioned; {profile} profile; {disposition}')
+
+
+def ready():
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        try:
+            # Version 8 is recorded only after all feature migration functions return.
+            if sql('SELECT count(*) FROM bms.schema_version WHERE version IN (1,2,3,4,5,6,7,8)', 'bms') != '8':
+                raise RuntimeError('Schema migrations incomplete')
+            if sql("SELECT count(*) FROM bms.auth_user u JOIN bms.auth_user_role r ON r.user_id=u.id WHERE r.role='PLATFORM_ADMIN'", 'bms') == '0':
+                raise RuntimeError('No BMS administrator')
+            marker = STATE / 'ready'
+            row = sql("SELECT encode(password_hash,'hex') || ':' || encode(salt,'hex') FROM bms.auth_user WHERE username='admin'", 'bms')
+            default_password = False
+            if row:
+                actual, salt = row.split(':')
+                expected = hashlib.pbkdf2_hmac('sha256', b'admin', bytes.fromhex(salt), 600000, dklen=len(bytes.fromhex(actual)))
+                default_password = hmac.compare_digest(expected.hex(), actual)
+            if not marker.exists():
+                if not default_password:
+                    raise RuntimeError('Initial BMS administrator password verification failed')
+                marker.touch(mode=0o600)
+            # Retry the actual API login after an interrupted first deployment.
+            # A changed/renamed administrator is preserved and never reset.
+            print('fresh' if default_password else 'existing')
+            return
+        except (RuntimeError, ValueError, subprocess.TimeoutExpired):
+            time.sleep(2)
+    raise RuntimeError('BMS schema/administrator did not become ready within 180 seconds')
+
+
+if __name__ == '__main__':
+    if os.geteuid() != 0 or (sys.argv[1:] not in (['setup', 'real'], ['setup', 'demo'], ['ready'])):
+        sys.exit(64)
+    os.umask(0o077)
+    try:
+        if sys.argv[1] == 'setup':
+            setup(sys.argv[2])
+        else:
+            ready()
+    except Exception as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

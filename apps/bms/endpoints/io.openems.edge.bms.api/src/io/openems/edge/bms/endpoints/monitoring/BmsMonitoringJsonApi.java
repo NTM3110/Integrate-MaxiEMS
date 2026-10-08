@@ -33,7 +33,7 @@ public class BmsMonitoringJsonApi implements JsonApi {
 	public static final String GET = "bms.monitoring.get";
 	public static final String LIST_ALARMS = "bms.monitoring.alarms.list";
 	public static final String ACKNOWLEDGE_ALARM = "bms.monitoring.alarms.acknowledge";
-	public static final int CONTRACT_VERSION = 2;
+	public static final int CONTRACT_VERSION = 3;
 
 	private final CopyOnWriteArrayList<BmsMonitoringSnapshotProvider> providers = new CopyOnWriteArrayList<>();
 
@@ -223,6 +223,9 @@ public class BmsMonitoringJsonApi implements JsonApi {
 		add(json, "socPct", value.socPct());
 		add(json, "sohPct", value.sohPct());
 		add(json, "availabilityWarning", value.availabilityWarning());
+		add(json, "measuredAtEpochMs", value.measuredAtEpochMs());
+		add(json, "ageMs", value.ageMs());
+		json.addProperty("quality", value.quality().name());
 		json.add("socEstimator", estimator(value.socEstimator()));
 		json.add("sohEstimator", estimator(value.sohEstimator()));
 		return json;

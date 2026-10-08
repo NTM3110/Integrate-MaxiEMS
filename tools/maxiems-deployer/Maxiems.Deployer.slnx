@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Maxiems.Deployer.Cli/Maxiems.Deployer.Cli.csproj" />
+    <Project Path="src/Maxiems.Deployer.App/Maxiems.Deployer.App.csproj" />
+    <Project Path="src/Maxiems.Deployer.Core/Maxiems.Deployer.Core.csproj" />
+    <Project Path="src/Maxiems.Deployer.Infrastructure/Maxiems.Deployer.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Maxiems.Deployer.Cli.Tests/Maxiems.Deployer.Cli.Tests.csproj" />
+    <Project Path="tests/Maxiems.Deployer.App.Tests/Maxiems.Deployer.App.Tests.csproj" />
+    <Project Path="tests/Maxiems.Deployer.Core.Tests/Maxiems.Deployer.Core.Tests.csproj" />
+    <Project Path="tests/Maxiems.Deployer.Infrastructure.Tests/Maxiems.Deployer.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

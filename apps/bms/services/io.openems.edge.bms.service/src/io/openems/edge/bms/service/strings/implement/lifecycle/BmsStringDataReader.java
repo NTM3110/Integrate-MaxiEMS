@@ -64,15 +64,22 @@ public class BmsStringDataReader {
 		var cells = new ArrayList<CellData>(definition.cellQty());
 		for (var cellId = 1; cellId <= definition.cellQty(); cellId++) {
 			var cell = usableSnapshot == null ? null : usableSnapshot.cells().get(cellId);
-			cells.add(cell == null
+			var monitoredCell = usableMonitoring == null ? null : usableMonitoring.cells().get(cellId);
+			cells.add(cell == null || monitoredCell == null
 					? new CellData(cellId, null, null, null, null, null, null,
 							readinessPending ? "READINESS_PENDING"
 									: snapshotCellCountMismatch ? "CONFIGURATION_MISMATCH" : null)
-					: new CellData(cell.cellId(), cell.voltage(), cell.temperature(), cell.internalResistance(),
-							cell.soc(), cell.soh(), cell.ir(), cell.availabilityWarning(), cell.socEstimator(),
-							cell.sohEstimator()));
+					: new CellData(cell.cellId(), monitoredCell.voltageV(), monitoredCell.temperatureC(),
+							monitoredCell.resistanceUohm() == null ? null : monitoredCell.resistanceUohm().intValue(),
+							monitoredCell.socPct(), monitoredCell.sohPct(),
+							monitoredCell.quality() == io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality.FRESH
+									|| monitoredCell.quality() == io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality.RETAINED
+											? cell.ir() : null,
+							monitoredCell.availabilityWarning(), monitoredCell.socEstimator(), monitoredCell.sohEstimator(),
+							monitoredCell.measuredAtEpochMs(), monitoredCell.ageMs(), monitoredCell.quality().name()));
 		}
-		var unavailableTaCellIds = cells.stream().filter(cell -> cell.availabilityWarning() != null)
+		var unavailableTaCellIds = cells.stream().filter(cell -> cell.availabilityWarning() != null
+				|| "STALE".equals(cell.quality()) || "UNAVAILABLE".equals(cell.quality()))
 				.map(CellData::cellId).toList();
 
 		var snapshotAgeMs = snapshot == null ? null : Math.max(0, System.currentTimeMillis() - snapshot.capturedAt());
@@ -82,10 +89,10 @@ public class BmsStringDataReader {
 			for (var index = 0; index < cells.size(); index++) {
 				var cell = cells.get(index);
 				cells.set(index, new CellData(cell.cellId(), null, null, null, null, null, null,
-						cell.availabilityWarning(), null, null));
+						cell.availabilityWarning(), null, null, cell.measuredAtEpochMs(), cell.ageMs(), "STALE"));
 			}
 		}
-		var data = usableSnapshot == null || snapshotStale ? emptyStringData() : stringData(usableSnapshot);
+		var data = usableMonitoring == null || snapshotStale ? emptyStringData() : stringData(usableMonitoring);
 		var active = !snapshotStale && usableSnapshot != null
 				&& cells.stream().anyMatch(cell -> cell.voltage() != null);
 		var error = calculator == null
@@ -118,13 +125,48 @@ public class BmsStringDataReader {
 		return new Detail(definition, active, message, data, List.copyOf(cells), status, usableMonitoring);
 	}
 
-	private static StringData stringData(BmsCalculationSnapshot value) {
-		return new StringData(value.ambientTemperature(), value.stringCurrent(), value.stringSoc(), value.stringSoh(),
-				value.stringVoltage(), value.midpointVoltage(), value.averageVoltage(), value.averageTemperature(), value.averageResistance(),
-				value.maxVoltage(), value.maxVoltageCellIndex(), value.minVoltage(), value.minVoltageCellIndex(),
-				value.maxTemperature(), value.maxTemperatureCellIndex(), value.minTemperature(), value.minTemperatureCellIndex(),
-				value.maxResistance(), value.maxResistanceCellIndex(), value.minResistance(), value.minResistanceCellIndex(),
-				value.socEstimator(), value.sohEstimator());
+	private static StringData stringData(io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot value) {
+		var string = value.string();
+		var cells = value.cells();
+		return new StringData(string.ambientTemperatureC(), string.batteryCurrentA(), string.batterySocPct(),
+				string.batterySohPct(), string.batteryVoltageV(), string.midpointVoltageV(), string.averageCellVoltageV(),
+				string.averageCellTemperatureC(), string.averageCellResistanceUohm(), string.maxCellVoltageV(),
+				indexOf(cells, string.maxCellVoltageV(), Metric.VOLTAGE), string.minCellVoltageV(),
+				indexOf(cells, string.minCellVoltageV(), Metric.VOLTAGE), string.maxCellTemperatureC(),
+				indexOf(cells, string.maxCellTemperatureC(), Metric.TEMPERATURE), minimum(cells, Metric.TEMPERATURE),
+				indexOf(cells, minimum(cells, Metric.TEMPERATURE), Metric.TEMPERATURE), string.maxCellResistanceUohm(),
+				indexOf(cells, string.maxCellResistanceUohm(), Metric.RESISTANCE), integerMinimum(cells),
+				indexOf(cells, integerMinimum(cells), Metric.RESISTANCE), value.socEstimator(), value.sohEstimator());
+	}
+
+	private enum Metric { VOLTAGE, TEMPERATURE, RESISTANCE }
+
+	private static Double metric(io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurements cell,
+			Metric metric) {
+		return switch (metric) {
+		case VOLTAGE -> cell.voltageV();
+		case TEMPERATURE -> cell.temperatureC();
+		case RESISTANCE -> cell.resistanceUohm();
+		};
+	}
+
+	private static Integer indexOf(java.util.Map<Integer, io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurements> cells,
+			Number target, Metric metric) {
+		if (target == null) return null;
+		return cells.entrySet().stream().filter(entry -> metric(entry.getValue(), metric) != null
+				&& Double.compare(metric(entry.getValue(), metric), target.doubleValue()) == 0)
+				.map(java.util.Map.Entry::getKey).findFirst().orElse(null);
+	}
+
+	private static Double minimum(java.util.Map<Integer, io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurements> cells,
+			Metric metric) {
+		return cells.values().stream().map(cell -> metric(cell, metric)).filter(java.util.Objects::nonNull)
+				.min(Double::compare).orElse(null);
+	}
+
+	private static Integer integerMinimum(java.util.Map<Integer, io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurements> cells) {
+		var value = minimum(cells, Metric.RESISTANCE);
+		return value == null ? null : value.intValue();
 	}
 
 	private static StringData emptyStringData() {

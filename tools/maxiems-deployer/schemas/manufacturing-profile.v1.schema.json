@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxiems.local/schemas/manufacturing-profile-v1.json",
+  "title": "MAXiEMS Manufacturing Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profile", "hardware", "deployment"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "state", "displayName", "productFamily", "hardwareVariant", "changeNote"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+        "version": { "type": "integer", "minimum": 1 },
+        "state": { "enum": ["draft", "validated", "approved", "archived"] },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "productFamily": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "hardwareVariant": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "changeNote": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memoryBytes", "storage", "operatingSystem", "ethernetPorts", "modules"],
+      "properties": {
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["architectures", "models", "minimumLogicalCores"],
+          "properties": {
+            "architectures": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["amd64", "arm64"] } },
+            "models": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } },
+            "minimumLogicalCores": { "type": "integer", "minimum": 1, "maximum": 1024 }
+          }
+        },
+        "memoryBytes": { "$ref": "#/$defs/nonNegativeRange" },
+        "storage": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "sizeBytes", "allowedModels"],
+            "properties": {
+              "kind": { "enum": ["unknown", "emmc", "nvme", "sata", "usb"] },
+              "sizeBytes": { "$ref": "#/$defs/nonNegativeRange" },
+              "allowedModels": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } }
+            }
+          }
+        },
+        "operatingSystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "versions", "architectures", "imageVersions", "requireExactKernel"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "versions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 40 } },
+            "architectures": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["amd64", "arm64"] } },
+            "imageVersions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } },
+            "requireExactKernel": { "type": "boolean" },
+            "kernelVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+          }
+        },
+        "ethernetPorts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["physicalLabel", "serialSource"],
+            "properties": {
+              "physicalLabel": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "serialSource": { "type": "boolean" }
+            }
+          }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ruleId", "kind", "mode", "matchers"],
+            "properties": {
+              "ruleId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+              "kind": { "enum": ["cellular4G", "lora", "wifi", "bluetoothLowEnergy"] },
+              "mode": { "enum": ["required", "optional", "forbidden"] },
+              "matchers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["bus"],
+                  "properties": {
+                    "bus": { "enum": ["unknown", "usb", "pciExpress", "sdio", "uart", "spi", "integrated"] },
+                    "vendorId": { "type": "string", "minLength": 1, "maxLength": 32 },
+                    "productId": { "type": "string", "minLength": 1, "maxLength": 32 },
+                    "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "driver": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "interfaceName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "deviceNode": { "type": "string", "minLength": 1, "maxLength": 160 }
+                  },
+                  "anyOf": [
+                    { "required": ["vendorId"] },
+                    { "required": ["productId"] },
+                    { "required": ["model"] },
+                    { "required": ["driver"] },
+                    { "required": ["interfaceName"] },
+                    { "required": ["deviceNode"] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultReleaseId", "configureTailscale", "requireRebootAcceptance"],
+      "properties": {
+        "defaultReleaseId": { "type": "string", "pattern": "^[0-9]{14}-[0-9a-f]{12}$" },
+        "componentProfileId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "configureTailscale": { "type": "boolean" },
+        "requireRebootAcceptance": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "nonNegativeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum"],
+      "properties": {
+        "minimum": { "type": "integer", "minimum": 0 },
+        "maximum": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

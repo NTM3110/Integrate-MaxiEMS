@@ -85,6 +85,11 @@ public class StringJsonApiTest {
 		assertTrue(detail.get("monitoring").isJsonNull());
 		assertEquals("TA warning", detail.getAsJsonArray("cellsData").get(0).getAsJsonObject()
 				.get("availabilityWarning").getAsString());
+		assertEquals("RETAINED", detail.getAsJsonArray("cellsData").get(0).getAsJsonObject()
+				.get("quality").getAsString());
+		assertEquals(9L, detail.getAsJsonArray("cellsData").get(0).getAsJsonObject()
+				.get("measuredAtEpochMs").getAsLong());
+		assertEquals(1L, detail.getAsJsonArray("cellsData").get(0).getAsJsonObject().get("ageMs").getAsLong());
 		assertEquals("AUTHORITATIVE_BASELINE", detail.getAsJsonObject("stringData")
 				.getAsJsonObject("sohEstimator").get("method").getAsString());
 		assertEquals(42, detail.getAsJsonArray("cellsData").get(0).getAsJsonObject()
@@ -103,9 +108,42 @@ public class StringJsonApiTest {
 		call(builder, StringJsonApi.LIST, tokenParams());
 		call(builder, StringJsonApi.DELETE, indexParams());
 		assertEquals(1, operations.creates);
+		assertEquals(1, operations.lastCreate.stringIndex());
+		assertEquals("str1", operations.lastCreate.stringName());
 		assertEquals(1, operations.updates);
 		assertEquals(SocCheckpointPolicy.PERSIST_DATABASE, operations.lastUpdate.socCheckpointPolicy());
 		assertEquals(1, operations.deletes);
+	}
+
+	@Test
+	public void createRequiresExplicitPositiveStringIndexAndIgnoresOperatorDisplayName() throws Exception {
+		var operations = new Operations();
+		var api = api(Set.of(PlatformRole.PLATFORM_ADMIN), operations);
+		var builder = new JsonApiBuilder();
+		api.buildJsonApiRoutes(builder);
+
+		var missing = mutationParams(false);
+		missing.remove("stringIndex");
+		assertErrorContains(call(builder, StringJsonApi.CREATE, missing), "Missing stringIndex");
+
+		var zero = mutationParams(false);
+		zero.addProperty("stringIndex", 0);
+		assertErrorContains(call(builder, StringJsonApi.CREATE, zero), "positive whole number");
+
+		var fractional = mutationParams(false);
+		fractional.addProperty("stringIndex", 1.5);
+		assertErrorContains(call(builder, StringJsonApi.CREATE, fractional), "positive whole number");
+
+		var valid = mutationParams(false);
+		valid.addProperty("stringIndex", 7);
+		valid.addProperty("stringName", "operator supplied name");
+		call(builder, StringJsonApi.CREATE, valid);
+		assertEquals(7, operations.lastCreate.stringIndex());
+		assertEquals("str7", operations.lastCreate.stringName());
+	}
+
+	private static void assertErrorContains(JsonObject response, String expected) {
+		assertTrue(response.getAsJsonObject("error").get("message").getAsString().contains(expected));
 	}
 
 	@Test
@@ -177,8 +215,7 @@ public class StringJsonApiTest {
 
 	private static JsonObject mutationParams(boolean update) {
 		var params = indexParams();
-		if (!update) params.remove("stringIndex");
-		params.addProperty("stringName", "String 1");
+		if (update) params.addProperty("stringName", "String 1");
 		params.addProperty("cellQty", 1);
 		params.addProperty("serialPortId", "modbus0");
 		return params;
@@ -198,7 +235,8 @@ public class StringJsonApiTest {
 		return new Detail(definition(), true, "ACTIVE",
 				new StringData(25d, -0.15, 99d, 90d, 253d, 126.2, 2.3, 25d, 1800d, 2.3, 1,
 						2.3, 1, 25d, 1, 25d, 1, 1800, 1, 1800, 1, soc, soh),
-				List.of(new CellData(1, 2.3, 25d, 1800, 99d, 90d, 0.004, "TA warning", soc, soh)),
+				List.of(new CellData(1, 2.3, 25d, 1800, 99d, 90d, 0.004, "TA warning", soc, soh,
+						9L, 1L, "RETAINED")),
 				new CalculationStatus(true, 1, 1, 1.8, 2.3, 1800, null, 7L, 10L, 0, false,
 						5L, List.of(), null));
 	}
@@ -208,8 +246,9 @@ public class StringJsonApiTest {
 		private int updates;
 		private int deletes;
 		private Definition lastUpdate;
+		private Definition lastCreate;
 
-		@Override public Detail create(Definition request) { this.creates++; return detail(); }
+		@Override public Detail create(Definition request) { this.creates++; this.lastCreate = request; return detail(); }
 		@Override public Detail update(Definition request) { this.updates++; this.lastUpdate = request; return detail(); }
 		@Override public List<Definition> list() { return List.of(definition()); }
 		@Override public Detail getData(int stringIndex) { return detail(); }

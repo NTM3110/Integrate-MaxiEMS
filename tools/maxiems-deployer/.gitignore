@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+
+# Generated deployment and test artifacts
+artifacts/
+payload/*.zip
+tests/vm/evidence/
+keys/

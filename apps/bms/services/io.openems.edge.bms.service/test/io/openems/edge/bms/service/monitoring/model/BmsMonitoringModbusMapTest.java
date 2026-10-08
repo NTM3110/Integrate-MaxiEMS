@@ -2,9 +2,11 @@ package io.openems.edge.bms.service.monitoring.model;
 
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,45 +23,72 @@ import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeEv
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeSource;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.OperatingMode;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringModbusMap.RegisterValueType;
 
 public class BmsMonitoringModbusMapTest {
 
 	@Test
-	public void shouldExposeIdentitySignedMeasurementsAndStableAlarmBits() {
+	public void shouldExposeTheCompactV3RegisterCatalog() {
+		assertEquals(3, BmsMonitoringModbusMap.CONTRACT_VERSION);
+		assertEquals(36, BmsMonitoringModbusMap.LAST_RELATIVE_ADDRESS);
+		assertArrayEquals(new int[] { 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33 },
+				BmsMonitoringModbusMap.measurementRegisters().stream().mapToInt(value -> value.address()).toArray());
+		assertArrayEquals(new int[] { 100, 100, 100, 1, 100, 1000, 1000, 1000, 1, 1, 10, 10, 10, 100,
+				100, 100, 100 }, BmsMonitoringModbusMap.measurementRegisters().stream()
+						.mapToInt(value -> value.scale()).toArray());
+		assertArrayEquals(new String[] { "V", "V", "A", "W", "A", "V", "V", "V", "uOhm", "uOhm",
+				"degC", "degC", "degC", "%", "h", "%", "%" }, BmsMonitoringModbusMap.measurementRegisters()
+						.stream().map(value -> value.unit()).toArray(String[]::new));
+		assertArrayEquals(new String[] { "Battery Voltage", "Midpoint Voltage", "Battery Current",
+				"Battery Power", "Float Current", "Min Cell Voltage", "Max Cell Voltage",
+				"Average Cell Voltage", "Max Cell Resistance", "Average Cell Resistance",
+				"Ambient Temperature", "Max Cell Temperature", "Average Cell Temperature", "Battery SOC",
+				"Remaining Discharge Time", "Battery SOH", "Minimum Cell SOH" },
+				BmsMonitoringModbusMap.measurementRegisters().stream().map(value -> value.label())
+						.toArray(String[]::new));
+		assertEquals(RegisterValueType.SIGNED_32, BmsMonitoringModbusMap.measurementRegisters().get(0).type());
+		assertEquals(35, BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS);
+		assertEquals(36, BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS);
+		assertArrayEquals(new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 },
+				BmsMonitoringModbusMap.alarmBits().stream().mapToInt(value -> value.bit()).toArray());
+		assertArrayEquals(Alarm.values(), BmsMonitoringModbusMap.alarmBits().stream()
+				.map(value -> value.alarm()).toArray(Alarm[]::new));
+		assertArrayEquals(new String[] { "Low Cell Voltage Alarm", "High Cell Voltage Alarm",
+				"Battery Voltage Low", "Battery Voltage High", "Cell Resistance Alarm",
+				"Cell Temperature Alarm", "Float Charge Overcurrent Alarm", "Charge Overcurrent Alarm",
+				"Low SOC Alarm", "High Ambient Temperature", "Midpoint Voltage Alarm", "Sensor/Module Failure" },
+				BmsMonitoringModbusMap.alarmBits().stream().map(value -> value.label()).toArray(String[]::new));
+		assertEquals(RegisterValueType.BITMASK_16, BmsMonitoringModbusMap.alarmBits().get(0).type());
+	}
+
+	@Test
+	public void shouldExposeSignedMeasurementsAndStableAlarmMasks() {
 		var generation = UUID.fromString("10203040-5060-7080-90a0-b0c0d0e0f000");
 		var frame = frame(generation);
 		var registers = BmsMonitoringModbusMap.registers(frame);
 
-		assertEquals(1, registers.get(6001).intValue());
-		assertEquals(1, registers.get(6002).intValue());
-		assertEquals(0x1020, registers.get(6011).intValue());
-		assertEquals(0x3040, registers.get(6012).intValue());
-		assertEquals(0, registers.get(6019).intValue());
-		assertEquals(77, registers.get(6022).intValue());
-		assertEquals(Alarm.LOW_SOC.mask() | Alarm.SENSOR_MODULE_FAILURE.mask(),
-				u32(registers, 6007));
-		assertEquals(1, registers.get(6061 + Alarm.LOW_SOC.bit()).intValue());
-		assertEquals(1, registers.get(6061 + Alarm.SENSOR_MODULE_FAILURE.bit()).intValue());
-		assertEquals(0, registers.get(6061 + Alarm.HIGH_CELL_VOLTAGE.bit()).intValue());
+		assertEquals(36, registers.size());
 		var expectedMeasurements = new int[] { 25_325, 12_660, -1_575, -3_989, 15, 2_291, 2_309,
 				2_302, 1_901, 1_800, 251, 260, 254, 9_995, 1_025, 8_756, 8_001 };
 		for (var index = 0; index < expectedMeasurements.length; index++) {
-			assertEquals("measurement " + index, expectedMeasurements[index], s32(registers, 6101 + index * 2));
+			assertEquals("measurement " + index, expectedMeasurements[index],
+					s32(registers, BmsMonitoringModbusMap.measurementRegisters().get(index).address()));
 		}
-		for (var alarm : Alarm.values()) {
-			assertEquals((frame.alarmMask() & alarm.mask()) == 0 ? 0 : 1,
-					registers.get(6061 + alarm.bit()).intValue());
-		}
+		assertEquals(Alarm.LOW_SOC.mask() | Alarm.SENSOR_MODULE_FAILURE.mask(),
+				registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		assertEquals(0x0fff,
+				registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS).intValue());
+		assertEquals(0, registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS) & 0xf000);
+		assertEquals(0, registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS) & 0xf000);
 	}
 
 	@Test
 	public void shouldUseExplicitSentinelWithoutTurningUnavailableIntoZero() {
 		var missing = BmsMonitoringModbusMap.registers(null);
-		assertEquals(1, missing.get(6001).intValue());
-		assertEquals(0, missing.get(6002).intValue());
-		assertEquals(0xffff, missing.get(6011).intValue());
-		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(missing, 6101));
-		assertEquals(0xffff, missing.get(6061).intValue());
+		assertEquals(36, missing.size());
+		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(missing, 1));
+		assertEquals(0, missing.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		assertEquals(0, missing.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS).intValue());
 
 		var frame = frame(UUID.randomUUID());
 		var values = frame.string();
@@ -75,24 +104,8 @@ public class BmsMonitoringModbusMapTest {
 				frame.currentDirectionMapping(), frame.activeAlarms(), frame.alarmMask(), frame.alarmDetails(),
 				frame.qualityWarning());
 		var registers = BmsMonitoringModbusMap.registers(updated);
-		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(registers, 6103));
-		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(registers, 6129));
-	}
-
-	@Test
-	public void shouldExposeStaleAndRetainedQualityWithoutChangingAlarmBits() {
-		var base = frame(UUID.randomUUID());
-		var stale = new BmsMonitoringSnapshot(base.stringKey(), base.snapshotGeneration(), base.snapshotSequence(),
-				base.capturedAt(), base.currentMeasuredAt(), CurrentQuality.RETAINED, true, base.reference(),
-				base.string(), base.cells(), base.thresholds(), base.activeCalibration(),
-				new ModeEvidence(OperatingMode.UNKNOWN, ModeSource.NONE, base.capturedAt(), base.snapshotGeneration(),
-						base.snapshotSequence(), ModeQuality.STALE, "stale"), base.currentDirectionMapping(),
-				base.activeAlarms(), base.alarmMask(), base.alarmDetails(), "stale");
-		var registers = BmsMonitoringModbusMap.registers(stale);
-		assertEquals(1, registers.get(6003).intValue());
-		assertEquals(1, registers.get(6004).intValue());
-		assertEquals(2, registers.get(6006).intValue());
-		assertEquals(stale.alarmMask(), u32(registers, 6007));
+		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(registers, 3));
+		assertEquals(BmsMonitoringModbusMap.UNAVAILABLE_S32, s32(registers, 29));
 	}
 
 	@Test
@@ -102,17 +115,13 @@ public class BmsMonitoringModbusMapTest {
 				Alarm.CELL_RESISTANCE, AlarmEvaluation.UNAVAILABLE,
 				Alarm.FLOAT_CHARGE_OVERCURRENT, AlarmEvaluation.UNAVAILABLE));
 		var registers = BmsMonitoringModbusMap.registers(noReference);
-		assertEquals(1, registers.get(6002).intValue()); // Live measurements remain available.
-		assertEquals(25_325, s32(registers, 6101));
-		assertEquals(0xffff, registers.get(6061 + Alarm.CELL_RESISTANCE.bit()).intValue());
-		assertEquals(0xffff, registers.get(6061 + Alarm.FLOAT_CHARGE_OVERCURRENT.bit()).intValue());
-		assertEquals(0, registers.get(6061 + Alarm.BATTERY_VOLTAGE_HIGH.bit()).intValue());
+		assertEquals(25_325, s32(registers, 1));
+		assertEquals(0x0900, registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		assertEquals(0x0faf, registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS).intValue());
 		var stale = qualityFrame(base, true, Map.of(Alarm.LOW_SOC, AlarmEvaluation.UNAVAILABLE));
 		registers = BmsMonitoringModbusMap.registers(stale);
-		assertEquals(1, registers.get(6003).intValue());
-		assertEquals(0xffff, registers.get(6061 + Alarm.LOW_SOC.bit()).intValue());
-		assertEquals(1, registers.get(6061 + Alarm.SENSOR_MODULE_FAILURE.bit()).intValue());
-		assertEquals(base.alarmMask(), u32(registers, 6007)); // Mask is not repurposed as availability bits.
+		assertEquals(0x0800, registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		assertEquals(0x0eff, registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS).intValue());
 	}
 
 	@Test
@@ -131,12 +140,15 @@ public class BmsMonitoringModbusMapTest {
 
 	private static BmsMonitoringSnapshot qualityFrame(BmsMonitoringSnapshot base, boolean stale,
 			Map<Alarm, AlarmEvaluation> evaluations) {
+		var allEvaluations = new EnumMap<Alarm, AlarmEvaluation>(Alarm.class);
+		for (var alarm : Alarm.values()) allEvaluations.put(alarm, AlarmEvaluation.AVAILABLE);
+		allEvaluations.putAll(evaluations);
 		return new BmsMonitoringSnapshot(base.stringKey(), base.snapshotGeneration(), base.snapshotSequence(),
 				base.capturedAt(), base.currentMeasuredAt(), base.currentQuality(), stale, null, base.string(),
 				base.cells(), base.thresholds(), base.activeCalibration(), base.operatingMode(),
 				base.currentDirectionMapping(), base.activeAlarms(), base.alarmMask(), base.alarmDetails(),
 				stale ? "stale" : "reference unavailable", base.calculationSnapshot(), base.publicationGeneration(),
-				base.publicationRevision() + 1, evaluations);
+				base.publicationRevision() + 1, allEvaluations);
 	}
 
 	private static BmsMonitoringSnapshot frame(UUID generation) {
@@ -159,7 +171,4 @@ public class BmsMonitoringModbusMapTest {
 		return (registers.get(address) << 16) | registers.get(address + 1);
 	}
 
-	private static int u32(Map<Integer, Integer> registers, int address) {
-		return (registers.get(address) << 16) | registers.get(address + 1);
-	}
 }

@@ -41,12 +41,12 @@ public class StringJsonApi implements JsonApi {
 		builder.handleRequest(CREATE, call -> {
 			this.authorize(call.getRequest().getParams(), PlatformRole.BMS_OPERATOR);
 			return new GenericJsonrpcResponseSuccess(call.getRequest().getId(),
-					detail(this.strings.create(request(call.getRequest().getParams()))));
+					detail(this.strings.create(createRequest(call.getRequest().getParams()))));
 		});
 		builder.handleRequest(UPDATE, call -> {
 			this.authorize(call.getRequest().getParams(), PlatformRole.BMS_OPERATOR);
 			return new GenericJsonrpcResponseSuccess(call.getRequest().getId(),
-					detail(this.strings.update(request(call.getRequest().getParams()))));
+					detail(this.strings.update(updateRequest(call.getRequest().getParams()))));
 		});
 		builder.handleRequest(LIST, call -> {
 			this.authorize(call.getRequest().getParams(), PlatformRole.BMS_VIEWER);
@@ -81,8 +81,17 @@ public class StringJsonApi implements JsonApi {
 		if (!principal.hasRole(role)) throw new SecurityException("Insufficient role for BMS operation");
 	}
 
-	private static Definition request(JsonObject params) {
-		return new Definition(optionalInt(params, "stringIndex", 0), required(params, "stringName"),
+	private static Definition createRequest(JsonObject params) {
+		var stringIndex = requiredPositiveStringIndex(params);
+		return request(params, stringIndex, "str" + stringIndex);
+	}
+
+	private static Definition updateRequest(JsonObject params) {
+		return request(params, requiredPositiveStringIndex(params), required(params, "stringName"));
+	}
+
+	private static Definition request(JsonObject params, int stringIndex, String stringName) {
+		return new Definition(stringIndex, stringName,
 				requiredInt(params, "cellQty"), optional(params, "cellBrand"), optional(params, "cellModel"),
 				number(params, "ratedCapacity", 0), number(params, "cutoffVoltage", 0),
 				number(params, "floatVoltage", 0), number(params, "boostVoltage", 0), number(params, "rNew", 1450),
@@ -177,6 +186,9 @@ public class StringJsonApi implements JsonApi {
 		add(json, "temperature", value.temperature()); add(json, "internalResistance", value.internalResistance());
 		add(json, "soc", value.soc()); add(json, "soh", value.soh()); add(json, "ir", value.ir());
 		if (value.availabilityWarning() == null) json.add("availabilityWarning", JsonNull.INSTANCE); else json.addProperty("availabilityWarning", value.availabilityWarning());
+		add(json, "measuredAtEpochMs", value.measuredAtEpochMs());
+		add(json, "ageMs", value.ageMs());
+		json.addProperty("quality", value.quality());
 		json.add("socEstimator", estimator(value.socEstimator()));
 		json.add("sohEstimator", estimator(value.sohEstimator()));
 		return json;
@@ -243,6 +255,18 @@ public class StringJsonApi implements JsonApi {
 	private static int requiredInt(JsonObject params, String property) {
 		if (!params.has(property)) throw new IllegalArgumentException("Missing " + property);
 		return params.get(property).getAsInt();
+	}
+	private static int requiredPositiveStringIndex(JsonObject params) {
+		if (!params.has("stringIndex") || params.get("stringIndex").isJsonNull()) {
+			throw new IllegalArgumentException("Missing stringIndex");
+		}
+		try {
+			var value = params.get("stringIndex").getAsBigDecimal().intValueExact();
+			if (value < 1) throw new IllegalArgumentException("stringIndex must be a positive whole number");
+			return value;
+		} catch (ArithmeticException | NumberFormatException | UnsupportedOperationException e) {
+			throw new IllegalArgumentException("stringIndex must be a positive whole number", e);
+		}
 	}
 	private static int optionalInt(JsonObject params, String property, int fallback) {
 		return !params.has(property) || params.get(property).isJsonNull() ? fallback : params.get(property).getAsInt();

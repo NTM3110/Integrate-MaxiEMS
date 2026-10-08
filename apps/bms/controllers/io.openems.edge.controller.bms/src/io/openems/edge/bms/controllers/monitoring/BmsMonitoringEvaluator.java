@@ -13,6 +13,7 @@ import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.Alarm;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.AlarmDetail;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.AlarmEvaluation;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeEvidence;
 import io.openems.edge.bms.service.calibration.model.InitialBaselineReferenceDataset;
 
@@ -42,62 +43,90 @@ public final class BmsMonitoringEvaluator {
 		var alarms = EnumSet.noneOf(Alarm.class);
 		var details = new ArrayList<AlarmDetail>();
 		var cells = new LinkedHashMap<Integer, BmsMonitoringSnapshot.CellMeasurements>();
+		long freshnessMillis = policy.snapshotFreshnessSeconds() * 1_000L;
+		boolean completeCells = snapshot.cells().size() == snapshot.configuredCellCount()
+				&& !snapshot.cells().isEmpty()
+				&& java.util.stream.IntStream.rangeClosed(1, snapshot.configuredCellCount())
+						.allMatch(snapshot.cells()::containsKey);
 		Double minimumSoh = null;
 		for (var entry : snapshot.cells().entrySet()) {
 			var value = entry.getValue();
+			Long measuredAt = value.measuredAt() == null
+					&& value.quality() == BmsCalculationSnapshot.CellQuality.FRESH
+							? Long.valueOf(snapshot.capturedAt()) : value.measuredAt();
+			Long ageMs = measuredAt == null ? null : Math.max(0L, nowMillis - measuredAt);
+			var quality = cellQuality(value.quality(), ageMs, freshnessMillis);
+			var expose = quality == CellMeasurementQuality.FRESH || quality == CellMeasurementQuality.RETAINED;
 			Double resistanceThreshold = null;
 			if (baseline != null && entry.getKey() > 0 && entry.getKey() <= baseline.recoveryFloatSnapshot().cells().size()) {
 				var resistance = baseline.recoveryFloatSnapshot().cells().get(entry.getKey() - 1).resistanceUohm();
 				if (finite(resistance)) resistanceThreshold = resistance * policy.resistanceBaselineMultiplier();
 			}
-			cells.put(entry.getKey(), new BmsMonitoringSnapshot.CellMeasurements(entry.getKey(), value.voltage(),
-					value.internalResistance() == null ? null : value.internalResistance().doubleValue(),
-					value.temperature(), value.soc(), value.soh(), value.availabilityWarning(), resistanceThreshold,
-					value.socEstimator(), value.sohEstimator()));
-			if (finite(value.soh())) {
+			cells.put(entry.getKey(), new BmsMonitoringSnapshot.CellMeasurements(entry.getKey(),
+					expose ? value.voltage() : null,
+					expose && value.internalResistance() != null ? value.internalResistance().doubleValue() : null,
+					expose ? value.temperature() : null, expose ? value.soc() : null, expose ? value.soh() : null,
+					value.availabilityWarning(), resistanceThreshold, expose ? value.socEstimator() : null,
+					expose ? value.sohEstimator() : null, measuredAt, ageMs, quality));
+			if (expose && finite(value.soh())) {
 				minimumSoh = minimumSoh == null ? value.soh() : Math.min(minimumSoh, value.soh());
 			}
-			if (value.availabilityWarning() != null) {
+			if (value.availabilityWarning() != null
+					|| quality == CellMeasurementQuality.STALE
+					|| quality == CellMeasurementQuality.UNAVAILABLE) {
 				add(alarms, details, Alarm.SENSOR_MODULE_FAILURE, entry.getKey(), null, null,
-						value.availabilityWarning());
+						value.availabilityWarning() == null ? "CELL_DATA_" + quality.name()
+								: value.availabilityWarning());
 			}
 		}
 
-		var averageVoltage = snapshot.averageVoltage();
-		var averageTemperature = snapshot.averageTemperature();
+		var allVoltages = completeCells && cells.values().stream().allMatch(cell -> finite(cell.voltageV()));
+		var allTemperatures = completeCells && cells.values().stream().allMatch(cell -> finite(cell.temperatureC()));
+		var allResistances = completeCells && cells.values().stream().allMatch(cell -> finite(cell.resistanceUohm()));
+		var averageVoltage = allVoltages ? snapshot.averageVoltage() : null;
+		var averageTemperature = allTemperatures ? snapshot.averageTemperature() : null;
+		var averageResistance = allResistances ? snapshot.averageResistance() : null;
 		var ambient = snapshot.ambientTemperature();
-		for (var entry : snapshot.cells().entrySet()) {
+		for (var entry : cells.entrySet()) {
 			var cell = entry.getValue();
-			if (finite(cell.voltage()) && finite(averageVoltage)) {
+			if (finite(cell.voltageV()) && finite(averageVoltage)) {
 				double low = averageVoltage * (1.0 - policy.cellVoltageDeviationFraction());
 				double high = averageVoltage * (1.0 + policy.cellVoltageDeviationFraction());
-				if (cell.voltage() < low) add(alarms, details, Alarm.LOW_CELL_VOLTAGE, entry.getKey(), cell.voltage(), low,
+				if (cell.voltageV() < low) add(alarms, details, Alarm.LOW_CELL_VOLTAGE, entry.getKey(), cell.voltageV(), low,
 						"Cell voltage is below the live-average deviation limit");
-				if (cell.voltage() > high) add(alarms, details, Alarm.HIGH_CELL_VOLTAGE, entry.getKey(), cell.voltage(), high,
+				if (cell.voltageV() > high) add(alarms, details, Alarm.HIGH_CELL_VOLTAGE, entry.getKey(), cell.voltageV(), high,
 						"Cell voltage is above the live-average deviation limit");
 			}
 			var resistanceThreshold = cells.get(entry.getKey()).resistanceAlarmThresholdUohm();
-			if (finite(cell.internalResistance()) && resistanceThreshold != null && cell.internalResistance() > resistanceThreshold) {
-				add(alarms, details, Alarm.CELL_RESISTANCE, entry.getKey(), cell.internalResistance().doubleValue(),
+			if (finite(cell.resistanceUohm()) && resistanceThreshold != null && cell.resistanceUohm() > resistanceThreshold) {
+				add(alarms, details, Alarm.CELL_RESISTANCE, entry.getKey(), cell.resistanceUohm(),
 						resistanceThreshold, "Cell resistance exceeds its Initial Baseline");
 			}
-			if (finite(cell.temperature())) {
+			if (finite(cell.temperatureC())) {
 				if (finite(averageTemperature)
-						&& cell.temperature() > averageTemperature + policy.cellTemperatureAboveAverageC()) {
-					add(alarms, details, Alarm.CELL_TEMPERATURE, entry.getKey(), cell.temperature(),
+						&& cell.temperatureC() > averageTemperature + policy.cellTemperatureAboveAverageC()) {
+					add(alarms, details, Alarm.CELL_TEMPERATURE, entry.getKey(), cell.temperatureC(),
 							averageTemperature + policy.cellTemperatureAboveAverageC(),
 							"Cell temperature exceeds live average");
 				}
-				if (finite(ambient) && cell.temperature() > ambient + policy.cellTemperatureAboveAmbientC()) {
-					add(alarms, details, Alarm.CELL_TEMPERATURE, entry.getKey(), cell.temperature(),
+				if (finite(ambient) && cell.temperatureC() > ambient + policy.cellTemperatureAboveAmbientC()) {
+					add(alarms, details, Alarm.CELL_TEMPERATURE, entry.getKey(), cell.temperatureC(),
 							ambient + policy.cellTemperatureAboveAmbientC(),
 							"Cell temperature exceeds ambient");
 				}
 			}
 		}
 
+		/*
+		 * String voltage and midpoint voltage are TC measurements. A stale TA cell
+		 * invalidates cell-derived aggregates and alarms, but must not hide otherwise
+		 * fresh string-level telemetry or suspend its independent alarms.
+		 */
 		var voltage = snapshot.stringVoltage();
-		boolean socAvailable = finite(snapshot.stringSoc())
+		var midpointVoltage = snapshot.midpointVoltage();
+		boolean allCellSoc = completeCells && cells.values().stream().allMatch(cell -> finite(cell.socPct()));
+		boolean allCellSoh = completeCells && cells.values().stream().allMatch(cell -> finite(cell.sohPct()));
+		boolean socAvailable = allCellSoc && finite(snapshot.stringSoc())
 				&& (snapshot.socEstimator() == null
 						|| snapshot.socEstimator().quality() != BmsCalculationSnapshot.EstimatorQuality.UNAVAILABLE);
 		if (finite(voltage) && voltage < policy.batteryVoltageLowV()) add(alarms, details,
@@ -109,8 +138,8 @@ public final class BmsMonitoringEvaluator {
 		if (finite(ambient) && ambient > policy.highAmbientTemperatureC()) add(alarms, details,
 				Alarm.HIGH_AMBIENT_TEMPERATURE, null, ambient, policy.highAmbientTemperatureC(),
 				"Ambient temperature is high");
-		if (finite(voltage) && finite(snapshot.midpointVoltage())) {
-			double imbalance = Math.abs(snapshot.midpointVoltage() - voltage / 2.0);
+		if (finite(voltage) && finite(midpointVoltage)) {
+			double imbalance = Math.abs(midpointVoltage - voltage / 2.0);
 			if (imbalance > policy.midpointImbalanceV()) add(alarms, details, Alarm.MIDPOINT_VOLTAGE, null,
 					imbalance, policy.midpointImbalanceV(), "Midpoint half-string imbalance is high");
 		}
@@ -134,15 +163,10 @@ public final class BmsMonitoringEvaluator {
 		if (chargeMode && chargeCurrent != null && chargeThreshold != null && chargeCurrent > chargeThreshold) add(alarms, details,
 				Alarm.CHARGE_OVERCURRENT, null, chargeCurrent, chargeThreshold, "Charge current exceeds applied limit");
 
-		long freshnessMillis = policy.snapshotFreshnessSeconds() * 1_000L;
-		boolean snapshotStale = sourceUnavailable || nowMillis - snapshot.capturedAt() > freshnessMillis;
+		boolean snapshotStale = sourceUnavailable || nowMillis - snapshot.capturedAt() >= freshnessMillis;
 		boolean currentStale = snapshot.currentMeasuredAt() == null
-				|| nowMillis - snapshot.currentMeasuredAt() > freshnessMillis;
+				|| nowMillis - snapshot.currentMeasuredAt() >= freshnessMillis;
 		boolean stale = snapshotStale || currentStale;
-		boolean completeCells = snapshot.cells().size() == snapshot.configuredCellCount()
-				&& !snapshot.cells().isEmpty()
-				&& java.util.stream.IntStream.rangeClosed(1, snapshot.configuredCellCount())
-						.allMatch(snapshot.cells()::containsKey);
 		if (stale || snapshot.stringWarning() != null || snapshot.currentWarning() != null
 				|| !completeCells || snapshot.currentQuality() == BmsCalculationSnapshot.CurrentQuality.MISSING
 				|| snapshot.currentQuality() == BmsCalculationSnapshot.CurrentQuality.COMMUNICATION_FAILED
@@ -153,10 +177,8 @@ public final class BmsMonitoringEvaluator {
 		}
 		var evaluations = new EnumMap<Alarm, AlarmEvaluation>(Alarm.class);
 		for (var alarm : Alarm.values()) evaluations.put(alarm, AlarmEvaluation.AVAILABLE);
-		boolean allVoltages = completeCells && snapshot.cells().values().stream().allMatch(cell -> finite(cell.voltage()));
-		boolean allTemperatures = completeCells && snapshot.cells().values().stream().allMatch(cell -> finite(cell.temperature()));
 		boolean resistanceAvailable = baseline != null && completeCells
-				&& snapshot.cells().values().stream().allMatch(cell -> finite(cell.internalResistance()))
+				&& allResistances
 				&& baseline.recoveryFloatSnapshot().cells().size() == snapshot.configuredCellCount()
 				&& baseline.recoveryFloatSnapshot().cells().stream().allMatch(cell -> finite(cell.resistanceUohm()));
 		unavailableUnless(evaluations, Alarm.LOW_CELL_VOLTAGE, allVoltages && finite(averageVoltage));
@@ -170,7 +192,7 @@ public final class BmsMonitoringEvaluator {
 		unavailableUnless(evaluations, Alarm.CHARGE_OVERCURRENT, validMode && finite(chargeThreshold));
 		unavailableUnless(evaluations, Alarm.LOW_SOC, socAvailable);
 		unavailableUnless(evaluations, Alarm.HIGH_AMBIENT_TEMPERATURE, finite(ambient));
-		unavailableUnless(evaluations, Alarm.MIDPOINT_VOLTAGE, finite(voltage) && finite(snapshot.midpointVoltage()));
+		unavailableUnless(evaluations, Alarm.MIDPOINT_VOLTAGE, finite(voltage) && finite(midpointVoltage));
 		if (stale || !completeCells || snapshot.currentQuality() != BmsCalculationSnapshot.CurrentQuality.FRESH) {
 			for (var alarm : Alarm.values()) {
 				if (alarm != Alarm.SENSOR_MODULE_FAILURE) evaluations.put(alarm, AlarmEvaluation.UNAVAILABLE);
@@ -191,10 +213,13 @@ public final class BmsMonitoringEvaluator {
 				policy.resistanceBaselineMultiplier(), policy.cellTemperatureAboveAverageC(),
 				policy.cellTemperatureAboveAmbientC(), policy.floatCurrentBaselineMultiplier(), floatThreshold, chargeThreshold,
 				policy.lowSocPct(), policy.highAmbientTemperatureC(), policy.midpointImbalanceV());
-		var string = new BmsMonitoringSnapshot.StringMeasurements(voltage, snapshot.midpointVoltage(), current, power,
-				floatMode ? chargeCurrent : null, snapshot.minVoltage(), snapshot.maxVoltage(), snapshot.averageVoltage(),
-				snapshot.maxResistance(), snapshot.averageResistance(), ambient, snapshot.maxTemperature(),
-				averageTemperature, snapshot.stringSoc(), remainingDischargeHours, snapshot.stringSoh(), minimumSoh);
+		var string = new BmsMonitoringSnapshot.StringMeasurements(voltage, midpointVoltage, current, power,
+				floatMode ? chargeCurrent : null, allVoltages ? snapshot.minVoltage() : null,
+				allVoltages ? snapshot.maxVoltage() : null, averageVoltage,
+				allResistances ? snapshot.maxResistance() : null, averageResistance, ambient,
+				allTemperatures ? snapshot.maxTemperature() : null, averageTemperature,
+				socAvailable ? snapshot.stringSoc() : null, remainingDischargeHours,
+				allCellSoh ? snapshot.stringSoh() : null, allCellSoh ? minimumSoh : null);
 		var reference = baseline == null ? null : new BmsMonitoringSnapshot.ReferenceIdentity(baseline.calibrationEventId(), baseline.curve().id(),
 				baseline.curve().calibrationProcessId(), baseline.curve().processAttemptNumber(),
 				baseline.recoveryFloatSnapshot().sampleId(), baseline.vocSnapshot().sampleId(),
@@ -205,6 +230,17 @@ public final class BmsMonitoringEvaluator {
 				snapshot.stringWarning(), snapshot, snapshot.generation(), snapshot.sequence(), evaluations,
 				snapshot.socEstimator(), snapshot.sohEstimator());
 	}
+
+	private static CellMeasurementQuality cellQuality(BmsCalculationSnapshot.CellQuality quality, Long ageMs,
+			long freshnessMillis) {
+		if (quality == BmsCalculationSnapshot.CellQuality.UNAVAILABLE || ageMs == null) {
+			return CellMeasurementQuality.UNAVAILABLE;
+		}
+		if (ageMs >= freshnessMillis) return CellMeasurementQuality.STALE;
+		return quality == BmsCalculationSnapshot.CellQuality.RETAINED
+				? CellMeasurementQuality.RETAINED : CellMeasurementQuality.FRESH;
+	}
+
 
 	private static void unavailableUnless(EnumMap<Alarm, AlarmEvaluation> evaluations, Alarm alarm, boolean available) {
 		if (!available) evaluations.put(alarm, AlarmEvaluation.UNAVAILABLE);

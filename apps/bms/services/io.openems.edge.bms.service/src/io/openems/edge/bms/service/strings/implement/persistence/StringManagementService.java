@@ -29,17 +29,26 @@ public class StringManagementService implements StringManagementOperations {
 	private BmsStringReadinessDiagnostics readinessDiagnostics;
 
 	public synchronized Detail create(Definition request) throws Exception {
-		validate(request);
-		return this.dataReader.read(this.stringManager.create(request));
+		if (request.stringIndex() < 1) {
+			throw new IllegalArgumentException("String ID must use a positive index, for example str1");
+		}
+		if (this.stringManager.list().stream().anyMatch(value -> value.stringIndex() == request.stringIndex())) {
+			throw new IllegalArgumentException("String ID str" + request.stringIndex() + " already exists");
+		}
+		var canonical = withStringName(request, "str" + request.stringIndex());
+		validate(canonical);
+		return this.dataReader.read(this.stringManager.create(canonical));
 	}
 
 	@Override
 	public synchronized Detail update(Definition request) throws Exception {
-		validate(request);
 		if (request.stringIndex() < 1) {
 			throw new IllegalArgumentException("String index is required for update");
 		}
-		return this.dataReader.read(this.stringManager.update(request));
+		var previous = this.stringManager.get(request.stringIndex());
+		var definition = withStringName(request, previous.stringName());
+		validate(definition);
+		return this.dataReader.read(this.stringManager.update(definition));
 	}
 
 	public List<Definition> list() throws Exception {
@@ -88,5 +97,13 @@ public class StringManagementService implements StringManagementOperations {
 		if (request.cellQty() < 1 || request.cellQty() > 200) throw new IllegalArgumentException("Cell quantity must be between 1 and 200");
 		if (request.bridgeId() == null || request.bridgeId().isBlank()) throw new IllegalArgumentException("A dedicated Modbus bridge is required");
 		if (request.startTaUnitId() < 1) throw new IllegalArgumentException("Starting TA Modbus unit must be positive");
+	}
+
+	private static Definition withStringName(Definition request, String stringName) {
+		return new Definition(request.stringIndex(), stringName, request.cellQty(), request.cellBrand(),
+				request.cellModel(), request.ratedCapacity(), request.cutoffVoltage(), request.floatVoltage(),
+				request.boostVoltage(), request.rNew(), request.highResistanceThreshold(),
+				request.highTemperatureThreshold(), request.lowVoltageThreshold(), request.highVoltageThreshold(),
+				request.bridgeId(), request.startTaUnitId(), request.socCheckpointPolicy());
 	}
 }

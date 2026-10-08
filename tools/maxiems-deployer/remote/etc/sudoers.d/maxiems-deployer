@@ -1,0 +1,43 @@
+Defaults:maxiems-deploy secure_path=/usr/sbin:/usr/bin:/sbin:/bin
+Defaults:openems secure_path=/usr/sbin:/usr/bin:/sbin:/bin
+
+Cmnd_Alias MAXIEMS_DEPLOY = /usr/local/libexec/maxiems-deploy-helper install-prerequisites, \
+ /usr/local/libexec/maxiems-deploy-helper runtime-config, \
+ /usr/local/libexec/maxiems-deploy-helper bms-setup real, \
+ /usr/local/libexec/maxiems-deploy-helper bms-setup demo, \
+ /usr/local/libexec/maxiems-deploy-helper bms-ready, \
+ /usr/local/libexec/maxiems-deploy-helper reboot, \
+ /usr/local/libexec/maxiems-deploy-helper bootstrap-status, \
+ /usr/local/libexec/maxiems-deploy-helper current-release, \
+ /usr/local/libexec/maxiems-deploy-helper bootstrap-config *, \
+ /usr/local/libexec/maxiems-deploy-helper begin *, \
+ /usr/local/libexec/maxiems-deploy-helper quiesce-legacy *, \
+ /usr/local/libexec/maxiems-deploy-helper stage *, \
+ /usr/local/libexec/maxiems-deploy-helper activate *, \
+ /usr/local/libexec/maxiems-deploy-helper commit *, \
+ /usr/local/libexec/maxiems-deploy-helper abort *, \
+ /usr/local/libexec/maxiems-deploy-helper rollback *, \
+ /usr/local/libexec/maxiems-deploy-helper transaction-status *, \
+ /usr/local/libexec/maxiems-deploy-helper service *, \
+ /usr/local/libexec/maxiems-deploy-helper nginx *, \
+ /usr/local/libexec/maxiems-deploy-helper tailscale *, \
+ /usr/local/libexec/maxiems-deploy-helper status, \
+ /usr/local/libexec/maxiems-deploy-helper diagnostics
+
+Cmnd_Alias MAXIEMS_NETWORK = /usr/local/sbin/maxiems-network-helper validate *, \
+ /usr/local/sbin/maxiems-network-helper apply *, \
+ /usr/local/sbin/maxiems-network-helper confirm *, \
+ /usr/local/sbin/maxiems-network-helper rollback *, \
+ /usr/local/sbin/maxiems-network-helper status *
+
+maxiems-deploy ALL=(root) NOPASSWD: MAXIEMS_DEPLOY
+openems ALL=(root) NOPASSWD: MAXIEMS_NETWORK
+
+Cmnd_Alias MAXIEMS_BMS = /usr/local/sbin/maxiems-time-helper status, \
+ /usr/local/sbin/maxiems-time-helper configure *, \
+ /usr/local/sbin/maxiems-system-helper reboot, \
+ /usr/local/sbin/maxiems-wifi status, \
+ /usr/local/sbin/maxiems-wifi scan, \
+ /usr/local/sbin/maxiems-wifi connect *, \
+ /usr/local/sbin/maxiems-netcfg *
+openems ALL=(root) NOPASSWD: MAXIEMS_BMS

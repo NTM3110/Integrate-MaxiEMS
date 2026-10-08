@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>maxiems-deployer</AssemblyName>
+    <RootNamespace>Maxiems.Deployer.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Maxiems.Deployer.Infrastructure/Maxiems.Deployer.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

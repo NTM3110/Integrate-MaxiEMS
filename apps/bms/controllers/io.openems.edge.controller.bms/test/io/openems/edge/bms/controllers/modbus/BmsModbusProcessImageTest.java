@@ -5,6 +5,7 @@ import static org.junit.Assert.assertThrows;
 
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -26,55 +27,22 @@ import io.openems.edge.bms.service.monitoring.model.ActiveCalibrationContext;
 import io.openems.edge.bms.service.monitoring.model.BmsCurrentDirectionMapping;
 import io.openems.edge.bms.service.monitoring.contracts.BmsMonitoringSnapshotProvider;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.Alarm;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.AlarmEvaluation;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeEvidence;
 
 public class BmsModbusProcessImageTest {
 
 	@Test
-	public void shouldTranslateWorkbookAddressesAndScaleValues() throws Exception {
-		var image = new BmsModbusProcessImage(() -> Map.of(1, monitoringFrame()));
-		assertEquals(1450, image.getInputRegister(1000).getValue());
-		assertEquals(2801, image.getInputRegister(1300).getValue());
-		assertEquals(253, image.getInputRegister(1600).getValue());
-		assertEquals(55, image.getInputRegister(1900).getValue());
-		assertEquals(91, image.getInputRegister(2200).getValue());
-		assertEquals(0xffe2, image.getInputRegister(3000).getValue()); // -3.0 A
-		assertEquals(731, image.getInputRegister(3200).getValue());
-		assertEquals(11234, image.getInputRegister(3400).getValue());
-	}
-
-	@Test
-	public void shouldCoverCell110AndStringStride() throws Exception {
-		var image = new BmsModbusProcessImage(() -> Map.of(1, monitoringFrame(), 2, monitoringFrame()));
-		assertEquals(BmsModbusRegisterMapper.UNAVAILABLE, image.getInputRegister(1109).getValue());
-		assertEquals(1450, image.getInputRegister(11_000).getValue());
-	}
-
-	@Test
-	public void shouldUseSentinelAndBinaryAlarm() throws Exception {
-		var base = snapshot();
-		var cells = new LinkedHashMap<>(base.cells());
-		cells.put(1, new BmsCalculationSnapshot.Cell(1, null, null, null, null, null, null, "missing"));
-		var warning = copy(base, cells, "tc communication failed");
-		var image = new BmsModbusProcessImage(() -> Map.of(1, monitoringFrame(warning)));
-		assertEquals(BmsModbusRegisterMapper.UNAVAILABLE, image.getInputRegister(1300).getValue());
-		assertEquals(1, image.getInputRegister(5000).getValue());
-	}
-
-	@Test
-	public void shouldReserveSentinelForUnavailableValues() throws Exception {
-		var base = snapshot();
-		var negativeTenthAmp = new BmsCalculationSnapshot(base.generation(), base.sequence(), base.capturedAt(),
-				base.configuredCellCount(), base.ambientTemperature(), -0.1, base.currentMeasuredAt(),
-				base.currentQuality(), base.currentWarning(), base.stringSoc(), base.stringSoh(), base.stringVoltage(),
-				base.averageVoltage(), base.averageTemperature(), base.averageResistance(), base.maxVoltage(),
-				base.maxVoltageCellIndex(), base.minVoltage(), base.minVoltageCellIndex(), base.maxTemperature(),
-				base.maxTemperatureCellIndex(), base.minTemperature(), base.minTemperatureCellIndex(), base.maxResistance(),
-				base.maxResistanceCellIndex(), base.minResistance(), base.minResistanceCellIndex(), base.cells(),
-				base.stringWarning());
-		var image = new BmsModbusProcessImage(() -> Map.of(1, monitoringFrame(negativeTenthAmp)));
-
-		assertEquals(BmsModbusRegisterMapper.UNAVAILABLE, image.getInputRegister(3000).getValue());
+	public void shouldUseCompactRegistersAndOneThousandAddressStringStride() throws Exception {
+		var frame = monitoringFrame();
+		var image = new BmsModbusProcessImage(() -> Map.of(1, frame, 2, frame, 10, frame));
+		for (var firstOffset : new int[] { 1_000, 2_000, 10_000 }) {
+			var voltage = image.getInputRegisterRange(firstOffset, 2);
+			assertEquals(25_325, (voltage[0].getValue() << 16) | voltage[1].getValue());
+			assertEquals(1, image.getInputRegister(firstOffset + 34).getValue());
+			assertEquals(0x0fff, image.getInputRegister(firstOffset + 35).getValue());
+		}
 	}
 
 	@Test
@@ -90,21 +58,13 @@ public class BmsModbusProcessImageTest {
 			connection = new TCPMasterConnection(InetAddress.getLoopbackAddress());
 			connection.setPort(port);
 			connection.connect();
-			var request = new ReadInputRegistersRequest(1300, 1);
+			var request = new ReadInputRegistersRequest(1000, 2);
 			request.setUnitID(7);
 			var transaction = new ModbusTCPTransaction(connection);
 			transaction.setRequest(request);
 			transaction.execute();
 			var response = (ReadInputRegistersResponse) transaction.getResponse();
 
-			assertEquals(2801, response.getRegisters()[0].getValue());
-
-			request = new ReadInputRegistersRequest(6100, 2);
-			request.setUnitID(7);
-			transaction = new ModbusTCPTransaction(connection);
-			transaction.setRequest(request);
-			transaction.execute();
-			response = (ReadInputRegistersResponse) transaction.getResponse();
 			assertEquals(25_325,
 					(response.getRegisters()[0].getValue() << 16) | response.getRegisters()[1].getValue());
 		} finally {
@@ -121,37 +81,41 @@ public class BmsModbusProcessImageTest {
 	public void shouldRejectUnmappedAndWritableRegisters() {
 		var image = new BmsModbusProcessImage(() -> Map.of(1, monitoringFrame()));
 		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(0));
-		assertThrows(IllegalAddressException.class, () -> image.getInputRegisterRange(1000, 126));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(999));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(1036));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(1046));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(1300));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegister(11_000));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegisterRange(1000, 37));
+		assertThrows(IllegalAddressException.class, () -> image.getInputRegisterRange(1999, 2));
 		assertThrows(IllegalAddressException.class, () -> image.getRegister(1000));
 	}
 
 	@Test
-	public void shouldServeOneAtomicMonitoringFrameAndKeepLegacyMap() throws Exception {
+	public void shouldServeOneAtomicMonitoringFrameForTheCompleteRegisterBlock() throws Exception {
 		var frame = monitoringFrame();
 		var reads = new java.util.concurrent.atomic.AtomicInteger();
 		var image = new BmsModbusProcessImage(() -> {
 			reads.incrementAndGet();
 			return Map.of(1, frame);
 		});
-		var identity = image.getInputRegisterRange(6018, 4);
-		assertEquals(77, identity[3].getValue());
-		var voltage = image.getInputRegisterRange(6100, 2);
-		assertEquals(25_325, (voltage[0].getValue() << 16) | voltage[1].getValue());
-		assertEquals(2801, image.getInputRegister(1300).getValue());
-		assertEquals(3, reads.get()); // One capture per request, not per register.
-		assertEquals(0xffe2, image.getInputRegister(3000).getValue()); // Raw -3 A, not domain -15.75.
-		assertEquals(925, image.getInputRegister(3300).getValue()); // Legacy SoH, not monitoring average.
+		var registers = image.getInputRegisterRange(1000, 36);
+		assertEquals(25_325, (registers[0].getValue() << 16) | registers[1].getValue());
+		assertEquals(1, registers[34].getValue());
+		assertEquals(0x0fff, registers[35].getValue());
+		assertEquals(1, reads.get());
 	}
 
 	@Test
 	public void shouldExposeMonitoringSentinelsButRejectMissingProvider() throws Exception {
 		var configured = new BmsModbusProcessImage(() -> java.util.Collections.singletonMap(1, null));
-		assertEquals(1, configured.getInputRegister(6000).getValue());
-		assertEquals(0, configured.getInputRegister(6001).getValue());
-		assertEquals(0x8000, configured.getInputRegister(6100).getValue());
-		assertEquals(0xffff, configured.getInputRegister(1300).getValue());
+		assertEquals(0x8000, configured.getInputRegister(1000).getValue());
+		assertEquals(0, configured.getInputRegister(1001).getValue());
+		assertEquals(0, configured.getInputRegister(1034).getValue());
+		assertEquals(0, configured.getInputRegister(1035).getValue());
 		var missing = new BmsModbusProcessImage(Map::of);
-		assertThrows(IllegalAddressException.class, () -> missing.getInputRegister(6000));
+		assertThrows(IllegalAddressException.class, () -> missing.getInputRegister(1000));
+		assertThrows(IllegalAddressException.class, () -> missing.getInputRegister(3000));
 	}
 
 	@Test
@@ -167,6 +131,9 @@ public class BmsModbusProcessImageTest {
 		assertEquals(Set.of(1), controller.monitoringFrames().keySet());
 		controller.removeMonitoringProvider(first);
 		controller.addMonitoringProvider(monitoringProvider("str1", copyWithStringKey(monitoringFrame(), "str2")));
+		assertEquals(Map.of(), controller.monitoringFrames());
+
+		controller.addMonitoringProvider(monitoringProvider("str11", copyWithStringKey(monitoringFrame(), "str11")));
 		assertEquals(Map.of(), controller.monitoringFrames());
 	}
 
@@ -187,13 +154,16 @@ public class BmsModbusProcessImageTest {
 		var at = java.time.Instant.ofEpochMilli(1_789_000_000_123L);
 		var values = new BmsMonitoringSnapshot.StringMeasurements(253.25, 126.6, -15.75, -3989.0, 0.15,
 				2.291, 2.309, 2.302, 1901, 1800.4, 25.1, 26.0, 25.4, 99.95, 10.25, 87.56, 80.01);
+		var alarmEvaluations = new EnumMap<Alarm, AlarmEvaluation>(Alarm.class);
+		for (var alarm : Alarm.values()) alarmEvaluations.put(alarm, AlarmEvaluation.AVAILABLE);
 		return new BmsMonitoringSnapshot("str1", generation, 77, at, at.toEpochMilli(),
 				BmsCalculationSnapshot.CurrentQuality.FRESH, false,
 				new BmsMonitoringSnapshot.ReferenceIdentity(42, 2, 100, 1, 200, 201, "curve-hash"), values,
 				Map.of(), new BmsMonitoringSnapshot.AppliedThresholds(0.15, 0.15, 200, 242, 1.25, 4, 6, 3,
 						0.3, 40, 70, 40, 2), ActiveCalibrationContext.none(),
 				ModeEvidence.unknown(generation, 77, at, "test"), BmsCurrentDirectionMapping.NEGATIVE,
-				Set.of(), 0, java.util.List.of(), null, calculation, generation, 1, Map.of());
+				Set.of(Alarm.LOW_CELL_VOLTAGE), Alarm.LOW_CELL_VOLTAGE.mask(), java.util.List.of(), null,
+				calculation, generation, 1, alarmEvaluations);
 	}
 
 	private static BmsMonitoringSnapshot copyWithStringKey(BmsMonitoringSnapshot frame, String stringKey) {
@@ -219,14 +189,4 @@ public class BmsModbusProcessImageTest {
 				});
 	}
 
-	private static BmsCalculationSnapshot copy(BmsCalculationSnapshot value, Map<Integer, BmsCalculationSnapshot.Cell> cells,
-			String warning) {
-		return new BmsCalculationSnapshot(value.generation(), value.sequence(), value.capturedAt(),
-				value.configuredCellCount(), value.ambientTemperature(), value.stringCurrent(), value.currentMeasuredAt(),
-				value.currentQuality(), value.currentWarning(), value.stringSoc(), value.stringSoh(), value.stringVoltage(),
-				value.averageVoltage(), value.averageTemperature(), value.averageResistance(), value.maxVoltage(),
-				value.maxVoltageCellIndex(), value.minVoltage(), value.minVoltageCellIndex(), value.maxTemperature(),
-				value.maxTemperatureCellIndex(), value.minTemperature(), value.minTemperatureCellIndex(), value.maxResistance(),
-				value.maxResistanceCellIndex(), value.minResistance(), value.minResistanceCellIndex(), cells, warning);
-	}
 }

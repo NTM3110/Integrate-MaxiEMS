@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+"""Allow only an appliance reboot, never arbitrary systemctl arguments."""
+import os
+import subprocess
+import sys
+
+
+def main(args):
+    if os.geteuid() != 0 or args != ['reboot']:
+        raise ValueError('Root and exactly the reboot action are required')
+    subprocess.run(['/usr/bin/systemctl', 'reboot', '--no-block'], check=True, timeout=10,
+                   env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C'})
+
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except (ValueError, OSError, subprocess.SubprocessError):
+        print('Reboot command was rejected', file=sys.stderr)
+        sys.exit(1)

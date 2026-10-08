@@ -40,7 +40,7 @@ public class SystemdNetworkApplyCollaboratorTest {
 		assertEquals("confirm", invocations.get(2).get(3));
 		var transactionId = invocations.get(0).get(4);
 		assertTrue(invocations.stream().allMatch(argv -> argv.equals(List.of(//
-				"/usr/bin/sudo", "-n", "/usr/local/libexec/maxiems-network-helper", argv.get(3), transactionId))));
+				"/usr/bin/sudo", "-n", "/usr/local/sbin/maxiems-network-helper", argv.get(3), transactionId))));
 		assertTrue(Files.isRegularFile(root.resolve(transactionId).resolve("70-maxiems-eth0.network")));
 		assertFalse(invocations.stream().flatMap(List::stream).anyMatch(value -> value.contains("/bin/bash")));
 	}

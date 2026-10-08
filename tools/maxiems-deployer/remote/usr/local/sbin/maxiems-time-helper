@@ -1,0 +1,173 @@
+#!/usr/bin/python3
+"""Restricted systemd-timesyncd configuration and machine-readable status."""
+import ipaddress
+import json
+import os
+from pathlib import Path
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime
+
+CONFIG = Path('/etc/systemd/timesyncd.conf.d/90-maxiems.conf')
+TIMEDATECTL = '/usr/bin/timedatectl'
+SYSTEMCTL = '/usr/bin/systemctl'
+NTP_PORT = 123
+NTP_PROBE_TIMEOUT_SECONDS = 1.5
+
+
+def command(*args):
+    result = subprocess.run(args, capture_output=True, text=True, timeout=10,
+                            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C'})
+    if result.returncode:
+        raise RuntimeError('System time command failed: ' + ' '.join(args[:2]))
+    return result.stdout
+
+
+def properties(output):
+    return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
+
+
+def timesync_evidence(output):
+    evidence = {'packetCount': None, 'pollInterval': None}
+    for line in output.splitlines():
+        label, separator, value = line.strip().partition(':')
+        if not separator:
+            continue
+        if label == 'Packet count':
+            try:
+                evidence['packetCount'] = int(value.strip())
+            except ValueError:
+                pass
+        elif label == 'Poll interval':
+            evidence['pollInterval'] = value.strip().split(' (', 1)[0] or None
+    return evidence
+
+
+def probe_ntp(server):
+    """Return only after a validated NTP server response from the literal IP."""
+    address = ipaddress.ip_address(server)
+    family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
+    seconds = time.time() + 2208988800
+    transmit = struct.pack('!II', int(seconds), int((seconds % 1) * (1 << 32)))
+    request = bytes([0x23]) + bytes(39) + transmit
+    with socket.socket(family, socket.SOCK_DGRAM) as client:
+        client.settimeout(NTP_PROBE_TIMEOUT_SECONDS)
+        client.connect((str(address), NTP_PORT))
+        client.send(request)
+        response = client.recv(512)
+    if len(response) < 48:
+        raise ValueError('short response')
+    leap, version, mode = response[0] >> 6, (response[0] >> 3) & 0x07, response[0] & 0x07
+    stratum = response[1]
+    if leap == 3 or version not in (3, 4) or mode != 4 or not 1 <= stratum <= 15:
+        raise ValueError('invalid NTP header')
+    if response[24:32] != transmit or response[32:40] == bytes(8) or response[40:48] == bytes(8):
+        raise ValueError('invalid NTP timestamps')
+
+
+def status(error=None):
+    result = dict.fromkeys(('configuredServer', 'serverName', 'serverAddress', 'synchronized',
+                            'ntpServiceActive', 'timezone', 'serviceState', 'currentTime',
+                            'serverReachable', 'reachabilityError', 'packetCount', 'pollInterval', 'error'))
+    errors = [error] if error else []
+    try:
+        if CONFIG.exists():
+            for line in CONFIG.read_text().splitlines():
+                if line.startswith('NTP='):
+                    result['configuredServer'] = line[4:] or None
+        props = properties(command(TIMEDATECTL, 'show', '--no-pager'))
+        result['timezone'] = props.get('Timezone')
+        for source, dest in [('NTPSynchronized', 'synchronized'), ('NTP', 'ntpServiceActive')]:
+            value = props.get(source)
+            result[dest] = {'yes': True, 'no': False}.get(value)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        errors.append('Unable to read system time status')
+    try:
+        props = properties(command(TIMEDATECTL, 'show-timesync', '--no-pager'))
+        result['serverName'] = props.get('ServerName') or None
+        result['serverAddress'] = props.get('ServerAddress') or None
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        errors.append('Time synchronization server is unavailable')
+    try:
+        result.update(timesync_evidence(command(TIMEDATECTL, 'timesync-status', '--no-pager')))
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        errors.append('Time synchronization evidence is unavailable')
+    try:
+        props = properties(command(SYSTEMCTL, 'show', 'systemd-timesyncd.service', '--property=ActiveState'))
+        result['serviceState'] = props.get('ActiveState') or None
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        errors.append('Unable to read time synchronization service state')
+    probe_server = result['configuredServer'] or result['serverAddress']
+    if probe_server:
+        try:
+            # Never probe a hostname or an address not validated as a literal.
+            ipaddress.ip_address(probe_server)
+            probe_ntp(probe_server)
+            result['serverReachable'] = True
+        except (ValueError, OSError, socket.timeout):
+            result['serverReachable'] = False
+            result['reachabilityError'] = 'No valid NTP response received from the configured server'
+    else:
+        result['reachabilityError'] = 'No literal NTP server is configured or active'
+    # Sample the appliance clock after the commands and bounded network probe so
+    # callers anchor the displayed clock to the time at which this status was
+    # produced, rather than to the beginning of a potentially slow request.
+    result['currentTime'] = datetime.now().astimezone().isoformat(timespec='seconds')
+    result['error'] = '; '.join(errors) or None
+    return result
+
+
+def configure(value):
+    # Scope identifiers and hostnames are deliberately unsupported.
+    if '%' in value or not value or value.strip() != value:
+        raise ValueError('Expected one IPv4 or IPv6 literal')
+    ipaddress.ip_address(value)
+    CONFIG.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(prefix='.maxiems-time-', dir=CONFIG.parent)
+        with os.fdopen(fd, 'w') as stream:
+            stream.write('[Time]\nNTP=' + value + '\nFallbackNTP=time.cloudflare.com pool.ntp.org\n')
+            stream.flush()
+            os.fchmod(stream.fileno(), 0o644)
+            os.fsync(stream.fileno())
+        os.replace(temporary, CONFIG)
+        temporary = None
+        command(TIMEDATECTL, 'set-timezone', 'Asia/Ho_Chi_Minh')
+        command(SYSTEMCTL, 'enable', '--now', 'systemd-timesyncd.service')
+        command(TIMEDATECTL, 'set-ntp', 'true')
+        command(SYSTEMCTL, 'restart', 'systemd-timesyncd.service')
+    finally:
+        if temporary:
+            os.unlink(temporary)
+
+
+def main(args):
+    if os.geteuid() != 0:
+        raise PermissionError('Root permission is required')
+    if args == ['status']:
+        return status()
+    if len(args) == 2 and args[0] == 'configure':
+        # Validation errors are command failures, apply errors return actual status.
+        value = args[1]
+        if '%' in value or value.strip() != value:
+            raise ValueError('Expected one IPv4 or IPv6 literal')
+        ipaddress.ip_address(value)
+        try:
+            configure(value)
+        except (OSError, RuntimeError, subprocess.TimeoutExpired):
+            return status('Unable to apply time synchronization configuration')
+        return status()
+    raise ValueError('Usage: maxiems-time-helper status | configure <ip>')
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(sys.argv[1:])))
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)

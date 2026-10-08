@@ -1,0 +1,41 @@
+[Unit]
+Description=MAXiEMS OpenEMS Edge
+Documentation=https://openems.github.io/openems.io/openems/latest/edge/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=openems
+Group=openems
+WorkingDirectory=/var/lib/openems
+UMask=0027
+ExecStart=/usr/bin/java \
+ -Dorg.osgi.framework.storage=/var/lib/openems/osgi-cache \
+ -Dfelix.cm.dir=/var/lib/maxiems/shared/config/ \
+ -Dopenems.data.dir=/var/lib/openems/data \
+ -Dorg.apache.felix.eventadmin.Timeout=0 \
+ -Dorg.apache.felix.http.host=0.0.0.0 \
+ -Dorg.osgi.service.http.port=8080 \
+ -XX:+HeapDumpOnOutOfMemoryError \
+ -XX:HeapDumpPath=/var/log/openems \
+ -XX:+ExitOnOutOfMemoryError \
+ -jar /opt/maxiems/current/edge/openems.jar
+ExecStartPost=/usr/local/libexec/maxiems-edge-healthcheck 180
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=210s
+TimeoutStopSec=90s
+# Privileged operations are constrained by root-owned helpers and sudoers.
+# NoNewPrivileges/capability bounding would disable those sudo calls.
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ReadOnlyPaths=/opt/maxiems
+ReadWritePaths=/var/lib/maxiems/shared/config /var/lib/openems /var/log/openems
+
+[Install]
+WantedBy=multi-user.target

@@ -33,6 +33,7 @@ import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeEv
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeSource;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.OperatingMode;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringModbusMap;
 import io.openems.edge.bms.service.auth.model.AuthenticatedPrincipal;
 import io.openems.edge.bms.service.auth.contracts.PlatformAuthenticationService;
@@ -47,14 +48,14 @@ public class BmsMonitoringJsonApiTest {
 	private static final UUID ACTOR_ID = UUID.fromString("e995296a-a645-49fa-9bd6-0a586f1afc41");
 
 	@Test
-	public void apiAndModbusShouldExposeTheSameAtomicIdentityMeasurementsAndAlarmMask() throws Exception {
+	public void apiAndModbusShouldExposeTheSameAtomicMeasurementsAndAlarms() throws Exception {
 		var frame = frame();
 		var api = api(principal(PlatformRole.BMS_VIEWER), frame, new AlarmService());
 		var result = invoke(api, BmsMonitoringJsonApi.GET, params("valid"));
 		var json = result.getAsJsonObject("frame");
 		var registers = BmsMonitoringModbusMap.registers(frame);
 
-		assertEquals(2, result.get("contractVersion").getAsInt());
+		assertEquals(3, result.get("contractVersion").getAsInt());
 		assertFalse(json.has("calculationSnapshot"));
 		assertEquals(frame.snapshotGeneration().toString(), json.get("snapshotGeneration").getAsString());
 		assertEquals(frame.sourceGeneration().toString(), json.get("sourceGeneration").getAsString());
@@ -63,13 +64,40 @@ public class BmsMonitoringJsonApiTest {
 		assertEquals(frame.publicationRevision(), json.get("publicationRevision").getAsLong());
 		assertTrue(json.get("referenceAvailable").getAsBoolean());
 		assertEquals(12, json.getAsJsonObject("alarmEvaluations").size());
-		assertEquals(u64(registers, 6019), json.get("snapshotSequence").getAsLong());
-		assertEquals(u64(registers, 6023), json.get("capturedAtEpochMs").getAsLong());
-		assertEquals(u32(registers, 6007), json.get("alarmMask").getAsInt());
-		assertEquals(s32(registers, 6101) / 100.0,
-				json.getAsJsonObject("measurements").get("batteryVoltageV").getAsDouble(), 0.000001);
-		assertEquals(s32(registers, 6105) / 100.0,
-				json.getAsJsonObject("measurements").get("batteryCurrentA").getAsDouble(), 0.000001);
+		var measurementFields = new String[] { "batteryVoltageV", "midpointVoltageV", "batteryCurrentA",
+				"batteryPowerW", "floatCurrentA", "minCellVoltageV", "maxCellVoltageV",
+				"averageCellVoltageV", "maxCellResistanceUohm", "averageCellResistanceUohm",
+				"ambientTemperatureC", "maxCellTemperatureC", "averageCellTemperatureC", "batterySocPct",
+				"remainingDischargeHours", "batterySohPct", "minimumCellSohPct" };
+		var measurements = json.getAsJsonObject("measurements");
+		for (var index = 0; index < measurementFields.length; index++) {
+			var register = BmsMonitoringModbusMap.measurementRegisters().get(index);
+			if (measurements.get(measurementFields[index]).isJsonNull()) {
+				assertEquals(measurementFields[index], BmsMonitoringModbusMap.UNAVAILABLE_S32,
+						s32(registers, register.address()));
+				continue;
+			}
+			assertEquals(measurementFields[index],
+					Math.round(measurements.get(measurementFields[index]).getAsDouble() * register.scale()),
+					s32(registers, register.address()));
+		}
+		var expectedActiveMask = 0;
+		var expectedValidityMask = 0;
+		for (var alarmBit : BmsMonitoringModbusMap.alarmBits()) {
+			if (frame.alarmEvaluations().get(alarmBit.alarm()) != BmsMonitoringSnapshot.AlarmEvaluation.AVAILABLE) {
+				continue;
+			}
+			expectedValidityMask |= alarmBit.mask();
+			if (frame.activeAlarms().contains(alarmBit.alarm())) expectedActiveMask |= alarmBit.mask();
+		}
+		assertEquals(expectedActiveMask,
+				registers.get(BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS).intValue());
+		assertEquals(expectedValidityMask,
+				registers.get(BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS).intValue());
+		var cell = json.getAsJsonArray("cells").get(0).getAsJsonObject();
+		assertEquals("RETAINED", cell.get("quality").getAsString());
+		assertEquals(frame.capturedAt().minusSeconds(12).toEpochMilli(), cell.get("measuredAtEpochMs").getAsLong());
+		assertEquals(12_000L, cell.get("ageMs").getAsLong());
 		assertEquals(17, json.getAsJsonObject("measurements").size());
 		assertEquals(2, json.getAsJsonArray("activeAlarms").size());
 		assertEquals(42, json.getAsJsonObject("reference").get("calibrationEventId").getAsLong());
@@ -262,7 +290,9 @@ public class BmsMonitoringJsonApiTest {
 		var alarmMask = Alarm.LOW_SOC.mask() | Alarm.CELL_TEMPERATURE.mask();
 		return new BmsMonitoringSnapshot("str1", generation, 77, at, at.toEpochMilli(), CurrentQuality.FRESH,
 				false, reference, values,
-				Map.of(7, new BmsMonitoringSnapshot.CellMeasurements(7, 2.291, 1901.0, 26.0, 64.0, 80.01, null)),
+				Map.of(7, new BmsMonitoringSnapshot.CellMeasurements(7, 2.291, 1901.0, 26.0, 64.0, 80.01,
+						null, null, null, null, at.minusSeconds(12).toEpochMilli(), 12_000L,
+						CellMeasurementQuality.RETAINED)),
 				new BmsMonitoringSnapshot.AppliedThresholds(0.15, 0.15, 200, 242, 1.25, 4, 6, 3, 0.3, 40,
 						70, 40, 2), active, mode, BmsCurrentDirectionMapping.POSITIVE,
 				Set.of(Alarm.LOW_SOC, Alarm.CELL_TEMPERATURE), alarmMask,
@@ -286,16 +316,6 @@ public class BmsMonitoringJsonApiTest {
 				frame.string(), frame.cells(), frame.thresholds(), frame.activeCalibration(), frame.operatingMode(),
 				frame.currentDirectionMapping(), frame.activeAlarms(), frame.alarmMask(), frame.alarmDetails(),
 				frame.qualityWarning());
-	}
-
-	private static long u64(Map<Integer, Integer> registers, int address) {
-		long result = 0;
-		for (var i = 0; i < 4; i++) result = (result << 16) | registers.get(address + i);
-		return result;
-	}
-
-	private static int u32(Map<Integer, Integer> registers, int address) {
-		return (registers.get(address) << 16) | registers.get(address + 1);
 	}
 
 	private static int s32(Map<Integer, Integer> registers, int address) {

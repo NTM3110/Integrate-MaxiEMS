@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly COMMON='/usr/local/libexec/maxiems-helper-common'
+# shellcheck source=/dev/null
+source "$COMMON"
+require_root
+shopt -s nullglob
+
+readonly MANAGED_ROOT='/etc/systemd/network'
+readonly ACTIVE_LOCK='/run/maxiems-network-transaction'
+
+transaction_dir() {
+	/usr/bin/printf '%s/%s' "$MAXIEMS_NETWORK_STATE" "$1"
+}
+
+active_transaction_is() {
+	[[ -f "$ACTIVE_LOCK/id" && "$(<"$ACTIVE_LOCK/id")" == "$1" ]]
+}
+
+validate_line() {
+	local line="$1"
+	local expected_interface="$2"
+	[[ "$line" != *$'\r'* ]] || die 'invalid network content encoding'
+	[[ -z "$line" || "$line" =~ ^#[A-Za-z0-9_:.@/+\ -]*$ \
+		|| "$line" =~ ^\[(Match|Network|Address|Route|DHCP)\]$ ]] && return
+	local key="${line%%=*}"
+	local value="${line#*=}"
+	[[ "$key" != "$line" ]] || die 'invalid network content line'
+	case "$key" in
+		Name) [[ "$value" == "$expected_interface" ]] ;;
+		DHCP|LinkLocalAddressing|IPv4Forwarding) [[ "$value" == 'yes' || "$value" == 'no' ]] ;;
+		IPMasquerade) [[ "$value" == 'no' || "$value" == 'ipv4' || "$value" == 'ipv6' || "$value" == 'both' ]] ;;
+		DNS|Gateway|Address) [[ "$value" =~ ^[A-Fa-f0-9.:/]+$ ]] ;;
+		RouteMetric|Metric) [[ "$value" =~ ^[0-9]{1,10}$ ]] ;;
+		Label) [[ "$value" =~ ^[A-Za-z0-9_.:-]{0,63}$ ]] ;;
+		*) die 'unknown network property' ;;
+	esac || die 'invalid network property value'
+}
+
+validate_network() {
+	local transaction_id="$1"
+	local source="${MAXIEMS_NETWORK_STAGING}/${transaction_id}"
+	local transaction
+	transaction="$(transaction_dir "$transaction_id")"
+	[[ -d "$source" && ! -L "$source" ]] || die 'network staging directory is unsafe'
+	[[ ! -e "$transaction" && ! -L "$transaction" ]] || die 'transaction already exists'
+	/usr/bin/mkdir -- "$ACTIVE_LOCK" || die 'another network transaction is active'
+	/usr/bin/printf '%s\n' "$transaction_id" > "$ACTIVE_LOCK/id"
+	cleanup_validation() {
+		/usr/bin/rm -rf -- "$transaction" "$ACTIVE_LOCK"
+	}
+	trap cleanup_validation EXIT
+	/usr/bin/install --directory --owner=root --group=root --mode=0700 "$transaction/candidate"
+	local files=("$source"/*.network)
+	(( ${#files[@]} > 0 )) || die 'transaction has no network files'
+	local file base interface line
+	for file in "${files[@]}"; do
+		require_regular_no_symlink "$file"
+		base="$(/usr/bin/basename -- "$file")"
+		[[ "$base" =~ ^70-maxiems-([A-Za-z0-9][A-Za-z0-9_.:-]{0,14})\.network$ ]] \
+			|| die 'invalid managed network filename'
+		interface="${BASH_REMATCH[1]}"
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			validate_line "$line" "$interface"
+		done < "$file"
+		/usr/bin/install --owner=root --group=root --mode=0644 -- "$file" "$transaction/candidate/$base"
+	done
+	/usr/bin/rm -rf -- "$source"
+	trap - EXIT
+}
+
+reconfigure_managed() {
+	local file interface
+	/usr/bin/networkctl reload
+	for file in "$MANAGED_ROOT"/70-maxiems-*.network; do
+		interface="${file##*/70-maxiems-}"
+		interface="${interface%.network}"
+		/usr/bin/networkctl reconfigure "$interface"
+	done
+}
+
+apply_network() {
+	local transaction_id="$1"
+	active_transaction_is "$transaction_id" || die 'transaction is not active'
+	local transaction
+	transaction="$(transaction_dir "$transaction_id")"
+	[[ -d "$transaction/candidate" && ! -L "$transaction/candidate" ]] || die 'candidate is missing'
+	/usr/bin/install --directory --owner=root --group=root --mode=0700 "$transaction/backup"
+	local existing
+	for existing in "$MANAGED_ROOT"/70-maxiems-*.network; do
+		require_regular_no_symlink "$existing"
+		/usr/bin/cp -a -- "$existing" "$transaction/backup/"
+	done
+	/usr/bin/rm -f -- "$MANAGED_ROOT"/70-maxiems-*.network
+	/usr/bin/install --owner=root --group=root --mode=0644 -- "$transaction/candidate"/*.network "$MANAGED_ROOT/"
+	if ! reconfigure_managed; then
+		rollback_network "$transaction_id"
+		die 'network apply failed and was restored'
+	fi
+	/usr/bin/systemd-run --unit="maxiems-network-rollback-${transaction_id}" --on-active=120s \
+		/usr/local/sbin/maxiems-network-helper rollback "$transaction_id"
+}
+
+confirm_network() {
+	active_transaction_is "$1" || die 'transaction is not active'
+	/usr/bin/systemctl stop "maxiems-network-rollback-$1.timer" >/dev/null 2>&1 || true
+	/usr/bin/touch -- "$(transaction_dir "$1")/confirmed"
+	/usr/bin/rm -rf -- "$ACTIVE_LOCK"
+}
+
+rollback_network() {
+	local transaction_id="$1"
+	active_transaction_is "$transaction_id" || die 'transaction is not active'
+	local transaction
+	transaction="$(transaction_dir "$transaction_id")"
+	[[ -d "$transaction/backup" && ! -L "$transaction/backup" ]] || die 'backup is missing'
+	/usr/bin/rm -f -- "$MANAGED_ROOT"/70-maxiems-*.network
+	local backup=("$transaction/backup"/*.network)
+	if (( ${#backup[@]} > 0 )); then
+		/usr/bin/install --owner=root --group=root --mode=0644 -- "${backup[@]}" "$MANAGED_ROOT/"
+	fi
+	reconfigure_managed
+	/usr/bin/touch -- "$transaction/rolled-back"
+	/usr/bin/rm -rf -- "$ACTIVE_LOCK"
+}
+
+network_status() {
+	local transaction
+	transaction="$(transaction_dir "$1")"
+	[[ -d "$transaction" && ! -L "$transaction" ]] || die 'transaction does not exist'
+	if [[ -f "$transaction/confirmed" ]]; then
+		/usr/bin/printf 'confirmed\n'
+	elif [[ -f "$transaction/rolled-back" ]]; then
+		/usr/bin/printf 'rolled-back\n'
+	else
+		/usr/bin/printf 'pending\n'
+	fi
+}
+
+case "$1" in
+	validate) validate_network "$2" ;;
+	apply) apply_network "$2" ;;
+	confirm) confirm_network "$2" ;;
+	rollback) rollback_network "$2" ;;
+	status) network_status "$2" ;;
+	*) die 'internal network operation mismatch' ;;
+esac

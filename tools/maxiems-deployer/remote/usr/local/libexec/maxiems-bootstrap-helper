@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly DEPLOY_USER='maxiems-deploy'
+readonly DEPLOY_HOME='/var/lib/maxiems-deploy'
+readonly OPENEMS_USER='openems'
+readonly OPENEMS_HOME='/var/lib/openems'
+[[ "$(/usr/bin/id -u)" == '0' ]] || exit 64
+[[ "$#" == '2' && "$1" == 'install-layout' ]] || exit 64
+readonly SOURCE="$2"
+[[ "$SOURCE" =~ ^/tmp/maxiems-bootstrap-[0-9a-f]{32}$ ]] || exit 64
+[[ -d "$SOURCE" && ! -L "$SOURCE" ]] || exit 66
+
+ensure_account() {
+	local name="$1"
+	local home="$2"
+	local shell="$3"
+	local record
+	record="$(/usr/bin/getent passwd "$name" || true)"
+	if [[ -z "$record" ]]; then
+		/usr/sbin/useradd --system --user-group --home-dir "$home" --create-home --shell "$shell" "$name"
+	else
+		IFS=':' read -r actual_name _ actual_uid _ _ actual_home actual_shell <<< "$record"
+		[[ "$actual_name" == "$name" && "$actual_uid" -gt 0 && "$actual_uid" -lt 1000 \
+			&& "$actual_shell" == "$shell" ]] || exit 65
+		[[ "$actual_home" == "$home" || ( "$name" == openems && "$actual_home" == /var/lib/maxiems ) ]] || exit 65
+	fi
+}
+
+readonly public_key="${SOURCE}/maxiems-deploy.pub"
+[[ -f "$public_key" && ! -L "$public_key" && "$(/usr/bin/wc -l < "$public_key")" == '1' ]] || exit 66
+/usr/bin/grep -Eq '^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/]+={0,2}([[:space:]].*)?$' \
+	"$public_key" || exit 66
+/usr/bin/ssh-keygen -l -f "$public_key" >/dev/null
+
+ensure_account "$DEPLOY_USER" "$DEPLOY_HOME" /bin/bash
+ensure_account "$OPENEMS_USER" "$OPENEMS_HOME" /usr/sbin/nologin
+/usr/bin/passwd --lock "$OPENEMS_USER" >/dev/null
+/usr/bin/install --directory --owner="$DEPLOY_USER" --group="$DEPLOY_USER" --mode=0700 "$DEPLOY_HOME/.ssh"
+/usr/bin/install --owner="$DEPLOY_USER" --group="$DEPLOY_USER" --mode=0600 \
+	"$public_key" "$DEPLOY_HOME/.ssh/authorized_keys"
+
+/usr/bin/install --directory --owner=root --group=root --mode=0755 /usr/local/libexec /usr/local/sbin
+/usr/bin/install --directory --owner=root --group=root --mode=0755 /opt/maxiems/bootstrap
+if [[ ! -e /opt/maxiems/bootstrap/maxiems-edge.service ]]; then
+	/usr/bin/install --owner=root --group=root --mode=0644 \
+		"$SOURCE/maxiems-edge.service" /opt/maxiems/bootstrap/maxiems-edge.service
+fi
+if [[ ! -e /opt/maxiems/bootstrap/maxiems.nginx ]]; then
+	/usr/bin/install --owner=root --group=root --mode=0644 \
+		"$SOURCE/maxiems.nginx" /opt/maxiems/bootstrap/maxiems.nginx
+fi
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$SOURCE/maxiems-helper-common" /usr/local/libexec/maxiems-helper-common
+/usr/bin/install --owner=root --group=root --mode=0755 \
+	"$SOURCE/maxiems-deploy-helper" /usr/local/libexec/maxiems-deploy-helper
+/usr/bin/install --owner=root --group=root --mode=0700 \
+	"$SOURCE/maxiems-deploy-ops" /usr/local/libexec/maxiems-deploy-ops
+/usr/bin/install --owner=root --group=root --mode=0700 \
+	"$SOURCE/maxiems-prerequisite-ops" /usr/local/libexec/maxiems-prerequisite-ops
+/usr/bin/install --owner=root --group=root --mode=0700 \
+	"$SOURCE/maxiems-runtime-config-ops" /usr/local/libexec/maxiems-runtime-config-ops
+/usr/bin/install --owner=root --group=root --mode=0755 \
+	"$SOURCE/maxiems-edge-healthcheck" /usr/local/libexec/maxiems-edge-healthcheck
+/usr/bin/install --owner=root --group=root --mode=0700 \
+	"$SOURCE/maxiems-network-ops" /usr/local/libexec/maxiems-network-ops
+/usr/bin/install --owner=root --group=root --mode=0700 "$SOURCE/maxiems-bms-setup" /usr/local/libexec/maxiems-bms-setup
+for helper in maxiems-network-helper maxiems-time-helper maxiems-system-helper maxiems-wifi maxiems-netcfg; do
+ /usr/bin/install --owner=root --group=root --mode=0755 "$SOURCE/$helper" "/usr/local/sbin/$helper"
+done
+/usr/bin/rm -f -- \
+	/usr/local/libexec/maxiems-network-helper \
+	/usr/local/libexec/maxiems-time-helper \
+	/usr/local/libexec/maxiems-system-helper
+/usr/sbin/usermod --append --groups dialout openems
+architecture="$(/usr/bin/dpkg --print-architecture)"
+case "$architecture" in amd64|arm64) ;; *) exit 65 ;; esac
+/usr/bin/install --directory --owner=root --group=root --mode=0700 /var/lib/maxiems/state/offline-packages
+shopt -s nullglob
+packages=("$SOURCE"/"$architecture"-*.deb)
+(( ${#packages[@]} > 0 )) || { echo 'Offline Ubuntu dependency packages are missing' >&2; exit 66; }
+package_staging="$(/usr/bin/mktemp --directory /var/lib/maxiems/state/offline.XXXXXXXX)"
+for package in "${packages[@]}"; do
+ [[ -f "$package" && ! -L "$package" ]] || exit 66
+ expected="$(<"$package.sha256")"
+ [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || exit 66
+ actual="$(/usr/bin/sha256sum -- "$package")"
+ [[ "${actual%% *}" == "$expected" ]] || exit 66
+ /usr/bin/install --owner=root --group=root --mode=0600 "$package" "$package_staging/"
+done
+/usr/bin/rm -rf -- /var/lib/maxiems/state/offline-packages
+/usr/bin/mv -T -- "$package_staging" /var/lib/maxiems/state/offline-packages
+/usr/bin/install --owner=root --group=root --mode=0440 \
+	"$SOURCE/maxiems-deployer.sudoers" /etc/sudoers.d/.maxiems-deployer.tmp
+/usr/sbin/visudo -cf /etc/sudoers.d/.maxiems-deployer.tmp
+/usr/bin/mv -Tf -- /etc/sudoers.d/.maxiems-deployer.tmp /etc/sudoers.d/maxiems-deployer
+/usr/bin/install --directory --owner=root --group=root --mode=0755 /opt/maxiems /opt/maxiems/releases
+/usr/bin/install --directory --owner=maxiems-deploy --group=maxiems-deploy --mode=0700 /var/lib/maxiems-deploy/incoming
+/usr/bin/install --directory --owner=root --group=root --mode=0700 \
+	/var/lib/maxiems/state /var/lib/maxiems/state/deployments /var/lib/maxiems/network-transactions
+/usr/bin/install --directory --owner=openems --group=openems --mode=0700 \
+	/var/lib/maxiems/shared /var/lib/maxiems/shared/network-staging

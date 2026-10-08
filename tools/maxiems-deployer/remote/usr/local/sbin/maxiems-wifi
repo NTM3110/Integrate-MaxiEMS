@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+action="${1:-}"
+case "$action" in
+  status)
+    # Let awk consume all device rows so nmcli cannot receive SIGPIPE under pipefail.
+    wifi_device="$(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2 == "wifi" && device == "" { device = $1 } END { print device }')"
+    if [[ -z "$wifi_device" ]]; then
+      printf '{"connected":false,"connection":"","ip":""}\n'
+    else
+      nmcli -t -f GENERAL.STATE,GENERAL.CONNECTION,IP4.ADDRESS device show "$wifi_device" | python3 -c '
+import json
+import sys
+
+def unescape(value):
+    result = []
+    escaped = False
+    for char in value:
+        if escaped:
+            result.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        else:
+            result.append(char)
+    if escaped:
+        result.append("\\")
+    return "".join(result)
+
+status = {"connected": False, "connection": "", "ip": ""}
+for line in sys.stdin:
+    key, separator, value = line.rstrip("\n").partition(":")
+    if not separator:
+        continue
+    value = unescape(value)
+    if key == "GENERAL.STATE":
+        status["connected"] = value.startswith("100")
+    elif key == "GENERAL.CONNECTION":
+        status["connection"] = value
+    elif key.startswith("IP4.ADDRESS") and not status["ip"]:
+        status["ip"] = value
+print(json.dumps(status, separators=(",", ":")))
+'
+    fi
+    ;;
+  scan)
+    nmcli -t -f IN-USE,BSSID,SSID,SIGNAL,SECURITY device wifi list | python3 -c '
+import json
+import sys
+
+def parse_fields(line):
+    fields = []
+    value = []
+    escaped = False
+    for char in line.rstrip("\n"):
+        if escaped:
+            value.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ":" and len(fields) < 4:
+            fields.append("".join(value))
+            value = []
+        else:
+            value.append(char)
+    if escaped:
+        value.append("\\")
+    fields.append("".join(value))
+    return fields
+
+networks_by_identity = {}
+for line in sys.stdin:
+    fields = parse_fields(line)
+    if len(fields) != 5:
+        continue
+    in_use, bssid, ssid, signal, security = fields
+    network = {
+        "inUse": in_use == "*",
+        "bssid": bssid,
+        "ssid": ssid,
+        "signal": int(signal),
+        "security": security,
+        "known": False,
+    }
+    identity = (ssid, security)
+    selected = networks_by_identity.get(identity)
+    if (selected is None
+            or (network["inUse"] and not selected["inUse"])
+            or (network["inUse"] == selected["inUse"]
+                and network["signal"] > selected["signal"])):
+        networks_by_identity[identity] = network
+print(json.dumps({"networks": list(networks_by_identity.values())}, separators=(",", ":")))
+'
+    ;;
+  connect)
+    ssid="${2:-}"; bssid="${3:-}"; [[ -n "$ssid" && -n "$bssid" ]] || { echo "SSID and BSSID are required" >&2; exit 2; }
+    password=""
+    # The caller closes stdin after the exact password bytes. Reading to EOF
+    # avoids inventing a delimiter and preserves embedded/trailing newlines.
+    IFS= read -r -d '' password || true
+    if [[ -n "$password" ]]; then nmcli device wifi connect "$ssid" bssid "$bssid" password "$password"; else nmcli device wifi connect "$ssid" bssid "$bssid"; fi
+    python3 -c 'import json,sys; print(json.dumps({"success": True, "ssid": sys.argv[1]}, separators=(",", ":")))' "$ssid"
+    ;;
+  *) echo "Usage: $0 status|scan|connect <ssid> <bssid>" >&2; exit 2 ;;
+esac

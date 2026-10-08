@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxiems.local/schemas/deployer-payload-manifest-v1.json",
+  "title": "MAXiEMS Deployer Payload Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "gitRevision",
+    "sourceTimestampUtc",
+    "sourcePaths",
+    "supportedTargets",
+    "payloadHash",
+    "buildTimestampUtc",
+    "files"
+  ],
+  "properties": {
+    "formatVersion": { "const": 2 },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceTimestampUtc": { "type": "string", "format": "date-time" },
+    "buildTimestampUtc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "sourcePaths": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": { "enum": ["edge", "ui", "bootstrap", "remote", "prerequisites"] },
+          "path": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "supportedTargets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ubuntuVersions", "architectures"],
+      "properties": {
+        "ubuntuVersions": { "const": ["24.04"] },
+        "architectures": { "const": ["amd64", "arm64"] }
+      }
+    },
+    "payloadHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "length", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(edge|ui|bootstrap|remote|prerequisites)/[^\\\\]+" },
+          "length": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "id": "maxiems-edge-example",
+    "version": 1,
+    "state": "draft",
+    "displayName": "MAXiEMS Edge sanitized example",
+    "productFamily": "MAXiEMS Edge",
+    "hardwareVariant": "SANITIZED-EXAMPLE-NOT-FOR-PRODUCTION",
+    "changeNote": "Placeholder values only; replace with the approved AT Energy BOM before validation."
+  },
+  "hardware": {
+    "cpu": {
+      "architectures": ["arm64"],
+      "models": ["Example ARM CPU"],
+      "minimumLogicalCores": 4
+    },
+    "memoryBytes": {
+      "minimum": 4294967296,
+      "maximum": 8589934592
+    },
+    "storage": [
+      {
+        "kind": "emmc",
+        "sizeBytes": {
+          "minimum": 60000000000,
+          "maximum": 70000000000
+        },
+        "allowedModels": ["Example eMMC"]
+      }
+    ],
+    "operatingSystem": {
+      "id": "ubuntu",
+      "versions": ["24.04"],
+      "architectures": ["arm64"],
+      "imageVersions": ["maxiems-example-image"],
+      "requireExactKernel": false
+    },
+    "ethernetPorts": [
+      { "physicalLabel": "LAN1", "serialSource": false },
+      { "physicalLabel": "LAN2", "serialSource": true }
+    ],
+    "modules": [
+      {
+        "ruleId": "cellular-4g",
+        "kind": "cellular4G",
+        "mode": "optional",
+        "matchers": [
+          { "bus": "usb", "vendorId": "1234", "productId": "5678" }
+        ]
+      },
+      {
+        "ruleId": "lora-radio",
+        "kind": "lora",
+        "mode": "optional",
+        "matchers": [
+          { "bus": "uart", "deviceNode": "/dev/ttyEXAMPLE" }
+        ]
+      },
+      {
+        "ruleId": "wifi-radio",
+        "kind": "wifi",
+        "mode": "optional",
+        "matchers": [
+          { "bus": "sdio", "driver": "example_wifi" }
+        ]
+      },
+      {
+        "ruleId": "ble-radio",
+        "kind": "bluetoothLowEnergy",
+        "mode": "optional",
+        "matchers": [
+          { "bus": "integrated", "driver": "example_bluetooth" }
+        ]
+      }
+    ]
+  },
+  "deployment": {
+    "defaultReleaseId": "20260722080000-123456789abc",
+    "componentProfileId": "standard-maxiems",
+    "configureTailscale": false,
+    "requireRebootAcceptance": true
+  }
+}

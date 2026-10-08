@@ -21,7 +21,7 @@ import io.openems.common.exceptions.OpenemsException;
 public final class SystemdNetworkApplyCollaborator implements NetworkApplyCollaborator {
 
 	private static final Path DEFAULT_STAGING_ROOT = Path.of("/var/lib/maxiems/shared/network-staging");
-	private static final String HELPER = "/usr/local/libexec/maxiems-network-helper";
+	private static final String HELPER = "/usr/local/sbin/maxiems-network-helper";
 	private static final Pattern INTERFACE_PATTERN = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$");
 	private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 

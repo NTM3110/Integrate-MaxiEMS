@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly COMMON='/usr/local/libexec/maxiems-helper-common'
+readonly OPS='/usr/local/libexec/maxiems-network-ops'
+# shellcheck source=/dev/null
+source "$COMMON"
+require_root
+
+readonly operation="${1:-}"
+case "$operation" in
+	validate|apply|confirm|rollback|status)
+		require_arg_count 2 "$#"
+		validate_uuid "$2"
+		;;
+	*)
+		die 'unknown network operation'
+		;;
+esac
+
+exec "$OPS" "$@"

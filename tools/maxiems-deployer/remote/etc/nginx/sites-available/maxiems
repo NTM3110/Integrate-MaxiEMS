@@ -1,0 +1,53 @@
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+	server_name _;
+	root /opt/maxiems/current/ui;
+	index index.html;
+
+	location = /index.html {
+		add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+		add_header Pragma "no-cache" always;
+		expires -1;
+		try_files /index.html =404;
+	}
+
+	location ~* \.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2)$ {
+		add_header Cache-Control "public, max-age=31536000, immutable" always;
+		expires 1y;
+		try_files $uri =404;
+	}
+
+	location /rest/ {
+		proxy_pass http://127.0.0.1:8084/rest/;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_connect_timeout 5s;
+		proxy_read_timeout 65s;
+	}
+
+	location = /jsonrpc {
+		proxy_pass http://127.0.0.1:8084/jsonrpc;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_connect_timeout 5s;
+		proxy_read_timeout 65s;
+	}
+
+	location = /websocket {
+		proxy_pass http://127.0.0.1:8085;
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_read_timeout 75s;
+	}
+
+	location / {
+		add_header Cache-Control "no-cache" always;
+		try_files $uri $uri/ /index.html;
+	}
+}

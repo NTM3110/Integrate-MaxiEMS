@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Maxiems.Deployer.App.Tests</RootNamespace>
+    <AssemblyName>Maxiems.Deployer.App.Tests</AssemblyName>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MSTest" />
+    <ProjectReference Include="../../src/Maxiems.Deployer.App/Maxiems.Deployer.App.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../fixtures/manufacturing-profile.example.v1.json"
+          Link="fixtures/manufacturing-profile.example.v1.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

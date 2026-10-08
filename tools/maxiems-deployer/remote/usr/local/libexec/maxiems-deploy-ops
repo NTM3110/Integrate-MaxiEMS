@@ -1,0 +1,642 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly COMMON='/usr/local/libexec/maxiems-helper-common'
+# shellcheck source=/dev/null
+source "$COMMON"
+require_root
+
+readonly MANAGED_WEBSOCKET_CONFIG='/var/lib/maxiems/shared/config/Controller/Api/Websocket/maxiems.config'
+
+is_legacy_managed_websocket() {
+	local config="$1"
+	[[ -f "$config" && ! -L "$config" ]] || return 1
+	[[ "$(/usr/bin/awk 'END { print NR }' "$config")" == '11' ]] || return 1
+	if /usr/bin/cut -d= -f1 "$config" | /usr/bin/sort | /usr/bin/uniq -d | /usr/bin/grep -q .; then
+		return 1
+	fi
+	! /usr/bin/grep -Eqv '^(:org\.apache\.felix\.configadmin\.revision:=L"1"|alias=""|apiTimeout=I"60"|bindAddress="127\.0\.0\.1"|debugMode=B"false"|enabled=B"true"|id="ctrlApiWebsocket0"|port=I"8085"|service\.bundleLocation="\?"|service\.factoryPid="Controller\.Api\.Websocket"|service\.pid="Controller\.Api\.Websocket\.maxiems")$' "$config"
+}
+
+migrate_managed_websocket() {
+	local config="$MANAGED_WEBSOCKET_CONFIG"
+	is_legacy_managed_websocket "$config" || return 0
+	local candidate
+	candidate="$(/usr/bin/mktemp --tmpdir="${config%/*}" .maxiems-websocket.XXXXXXXX)"
+	cleanup_websocket_migration() {
+		/usr/bin/rm -f -- "$candidate"
+	}
+	trap cleanup_websocket_migration EXIT
+	/usr/bin/sed 's/^bindAddress="127\.0\.0\.1"$/bindAddress="0.0.0.0"/' "$config" > "$candidate"
+	/usr/bin/chown --reference="$config" -- "$candidate"
+	/usr/bin/chmod --reference="$config" -- "$candidate"
+	/usr/bin/mv -f -- "$candidate" "$config"
+	trap - EXIT
+}
+
+install_prerequisites() {
+	/usr/local/libexec/maxiems-prerequisite-ops
+}
+
+bootstrap_status() {
+	local target='/var/lib/maxiems/shared/config'
+	[[ ! -L "$target" ]] || die 'bootstrap config path is unsafe'
+	[[ ! -e "$target" || -d "$target" ]] || die 'bootstrap config path is unsafe'
+	if [[ -d "$target" && -n "$(/usr/bin/find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+		/usr/bin/printf 'present\n'
+	else
+		/usr/bin/printf 'absent\n'
+	fi
+}
+
+install_bootstrap_config() {
+	local upload_token="$1"
+	local expected_hash="$2"
+	local source="${MAXIEMS_INCOMING}/${upload_token}"
+	local target='/var/lib/maxiems/shared/config'
+	require_regular_no_symlink "$source"
+	local actual_hash
+	actual_hash="$(/usr/bin/sha256sum -- "$source")"
+	actual_hash="${actual_hash%% *}"
+	[[ "$actual_hash" == "$expected_hash" ]] || die 'bootstrap archive hash mismatch'
+	[[ ! -L "$target" ]] || die 'bootstrap config path is unsafe'
+	[[ ! -e "$target" || -d "$target" ]] || die 'bootstrap config path is unsafe'
+	if [[ -d "$target" && -n "$(/usr/bin/find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+		die 'bootstrap config already exists'
+	fi
+	local state
+	state="$(/usr/bin/mktemp --directory --tmpdir="$MAXIEMS_STATE" bootstrap.XXXXXXXX)"
+	cleanup_bootstrap_config() {
+		/usr/bin/rm -rf -- "$state"
+	}
+	trap cleanup_bootstrap_config EXIT
+	local expected=(
+	'Controller/Api/Rest/ReadWrite/maxiems.config'
+	'Controller/Api/Websocket/maxiems.config'
+		'Core/ComponentManager.config'
+		'Core/User.config'
+	)
+	local -a entries
+	mapfile -t entries < <(/usr/bin/unzip -Z1 "$source" | /usr/bin/sort)
+	[[ "${entries[*]}" == "${expected[*]}" ]] || die 'bootstrap archive entries are invalid'
+	local listing
+	while IFS= read -r listing; do
+		[[ ! "$listing" =~ ^[bchlp] ]] || die 'bootstrap archive contains a link or special file'
+	done < <(/usr/bin/zipinfo -l "$source")
+	/usr/bin/unzip -q "$source" -d "$state"
+	local file
+	for file in "${expected[@]}"; do
+		require_regular_no_symlink "$state/$file"
+		[[ "$(/usr/bin/stat --format='%s' -- "$state/$file")" -le 16384 ]] || die 'bootstrap config is too large'
+		if /usr/bin/grep -q $'\r' "$state/$file" || /usr/bin/grep -qP '\x00' "$state/$file"; then
+			die 'bootstrap config encoding is invalid'
+		fi
+		if /usr/bin/cut -d= -f1 "$state/$file" | /usr/bin/sort | /usr/bin/uniq -d | /usr/bin/grep -q .; then
+			die 'bootstrap config contains duplicate properties'
+		fi
+	done
+	/usr/bin/grep -Fxq 'service.pid="Core.User"' "$state/Core/User.config" \
+		|| die 'Core.User bootstrap config is invalid'
+	[[ "$(/usr/bin/awk 'END { print NR }' "$state/Core/User.config")" == '12' ]] \
+		|| die 'Core.User bootstrap property count is invalid'
+	if /usr/bin/grep -Eqv '^(:org\.apache\.felix\.configadmin\.revision:=L"1"|(admin|guest|installer|owner)(Password|Salt)="[A-Za-z0-9+/]+(\\=){0,2}"|service\.bundleLocation="\?"|service\.pid="Core\.User"|users="")$' \
+		"$state/Core/User.config"; then
+		die 'Core.User bootstrap properties are invalid'
+	fi
+	local known_default
+	for known_default in \
+		'txASlUVQkEI9Bxa/IZOJe8l3+R4lMzFTShz27vK44go\=' 'YWRtaW4\=' \
+		'2O1dMlsFdwafy58ehrT+X+0CEWaAmBRad5JFbTLx/Wo\=' 'aW5zdGFsbGVy' \
+		'eJgLBfHTmehv4S1whsfjeE3q3AJmJCBabV59Y65eoYI\=' 'b3duZXI\=' \
+		'IcIzJSOvNM1PvQ8v5ypFvPoTZyHw3Knob+zi7d+WspU\=' 'dXNlcg\=\='; do
+		! /usr/bin/grep -Fq -- "$known_default" "$state/Core/User.config" \
+			|| die 'repository default OpenEMS credentials are forbidden'
+	done
+	if /usr/bin/grep -Eqv '^(:org\.apache\.felix\.configadmin\.revision:=L"1"|alias="Core\.ComponentManager"|id="_componentManager"|service\.bundleLocation="\?"|service\.pid="Core\.ComponentManager")$' \
+		"$state/Core/ComponentManager.config"; then
+		die 'Core.ComponentManager bootstrap properties are invalid'
+	fi
+	[[ "$(/usr/bin/awk 'END { print NR }' "$state/Core/ComponentManager.config")" == '5' ]] \
+		|| die 'Core.ComponentManager bootstrap property count is invalid'
+/usr/bin/grep -Fxq 'bindAddress="127.0.0.1"' "$state/Controller/Api/Rest/ReadWrite/maxiems.config" \
+		|| die 'REST bootstrap bind address is invalid'
+	if /usr/bin/grep -Eqv '^(:org\.apache\.felix\.configadmin\.revision:=L"1"|alias=""|apiTimeout=I"60"|bindAddress="127\.0\.0\.1"|connectionlimit=I"5"|debugMode=B"false"|enabled=B"true"|id="ctrlApiRest0"|port=I"8084"|service\.bundleLocation="\?"|service\.factoryPid="Controller\.Api\.Rest\.ReadWrite"|service\.pid="Controller\.Api\.Rest\.ReadWrite\.maxiems")$' \
+	"$state/Controller/Api/Rest/ReadWrite/maxiems.config"; then
+		die 'REST bootstrap properties are invalid'
+	fi
+[[ "$(/usr/bin/awk 'END { print NR }' "$state/Controller/Api/Rest/ReadWrite/maxiems.config")" == '12' ]] \
+		|| die 'REST bootstrap property count is invalid'
+	/usr/bin/grep -Fxq 'bindAddress="0.0.0.0"' "$state/Controller/Api/Websocket/maxiems.config" \
+		|| die 'WebSocket bootstrap bind address is invalid'
+	if /usr/bin/grep -Eqv '^(:org\.apache\.felix\.configadmin\.revision:=L"1"|alias=""|apiTimeout=I"60"|bindAddress="0\.0\.0\.0"|debugMode=B"false"|enabled=B"true"|id="ctrlApiWebsocket0"|port=I"8085"|service\.bundleLocation="\?"|service\.factoryPid="Controller\.Api\.Websocket"|service\.pid="Controller\.Api\.Websocket\.maxiems")$' \
+	"$state/Controller/Api/Websocket/maxiems.config"; then
+		die 'WebSocket bootstrap properties are invalid'
+	fi
+[[ "$(/usr/bin/awk 'END { print NR }' "$state/Controller/Api/Websocket/maxiems.config")" == '11' ]] \
+		|| die 'WebSocket bootstrap property count is invalid'
+	if [[ -d "$target" ]]; then
+		/usr/bin/rmdir -- "$target"
+	fi
+	/usr/bin/mv -T -- "$state" "$target"
+	/usr/bin/chown -R openems:openems -- "$target"
+	/usr/bin/find "$target" -type d -exec /usr/bin/chmod 0750 -- {} +
+	/usr/bin/find "$target" -type f -exec /usr/bin/chmod 0640 -- {} +
+	if [[ -f "$MAXIEMS_DEPLOY_LOCK/id" ]]; then
+		local active_release
+		active_release="$(<"$MAXIEMS_DEPLOY_LOCK/id")"
+		validate_release_id "$active_release"
+		local active_transaction
+		active_transaction="$(transaction_dir "$active_release")"
+		[[ -f "$active_transaction/bootstrap-was-absent" ]] \
+			|| die 'active deployment did not own bootstrap creation'
+		/usr/bin/touch -- "$active_transaction/bootstrap-created"
+	fi
+	/usr/bin/rm -- "$source"
+	trap - EXIT
+}
+
+transaction_dir() {
+	/usr/bin/printf '%s/%s' "$MAXIEMS_DEPLOY_STATE" "$1"
+}
+
+active_transaction_is() {
+	[[ -f "$MAXIEMS_DEPLOY_LOCK/id" && "$(<"$MAXIEMS_DEPLOY_LOCK/id")" == "$1" ]]
+}
+
+snapshot_path() {
+	local transaction="$1"
+	local label="$2"
+	local path="$3"
+	if [[ -e "$path" || -L "$path" ]]; then
+		/usr/bin/cp -a --no-dereference -- "$path" "$transaction/$label.backup"
+		/usr/bin/touch -- "$transaction/$label.present"
+	fi
+}
+
+snapshot_service() {
+	local transaction="$1"
+	local service="$2"
+	if /usr/bin/systemctl is-enabled --quiet "$service"; then
+		/usr/bin/printf 'enabled\n' > "$transaction/$service.enabled"
+	else
+		/usr/bin/printf 'disabled\n' > "$transaction/$service.enabled"
+	fi
+	if /usr/bin/systemctl is-active --quiet "$service"; then
+		/usr/bin/printf 'active\n' > "$transaction/$service.active"
+	else
+		/usr/bin/printf 'inactive\n' > "$transaction/$service.active"
+	fi
+}
+
+begin_transaction() {
+	local release_id="$1"
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	/usr/bin/mkdir -- "$MAXIEMS_DEPLOY_LOCK" || die 'another deployment transaction is active'
+	/usr/bin/printf '%s\n' "$release_id" > "$MAXIEMS_DEPLOY_LOCK/id"
+	if [[ -d "$transaction" && ! -L "$transaction" && -f "$transaction/status" \
+		&& "$(<"$transaction/status")" == 'rolled-back' ]]; then
+		/usr/bin/rm -rf -- "$transaction"
+	fi
+	if [[ -e "$transaction" || -L "$transaction" ]]; then
+		/usr/bin/rm -rf -- "$MAXIEMS_DEPLOY_LOCK"
+		die 'deployment transaction already exists'
+	fi
+	cleanup_begin_transaction() {
+		/usr/bin/rm -rf -- "$transaction" "$MAXIEMS_DEPLOY_LOCK"
+	}
+	trap cleanup_begin_transaction EXIT
+	/usr/bin/install --directory --owner=root --group=root --mode=0700 "$transaction"
+	/usr/bin/rm -f -- "${MAXIEMS_ROOT}/current.next" "${MAXIEMS_ROOT}/current.rollback" \
+		"${MAXIEMS_ROOT}/previous.next"
+	local current="${MAXIEMS_ROOT}/current"
+	if [[ -L "$current" ]]; then
+		local previous
+		previous="$(/usr/bin/readlink -f -- "$current")"
+		[[ "$previous" =~ ^${MAXIEMS_RELEASES}/([0-9]{14}-[0-9a-f]{12})$ ]] \
+			|| die 'current release link is outside the managed release root'
+		/usr/bin/printf '%s\n' "${BASH_REMATCH[1]}" > "$transaction/previous-release"
+	elif [[ -e "$current" ]]; then
+		die 'current release path is not a symbolic link'
+	fi
+	snapshot_path "$transaction" 'edge-unit' '/etc/systemd/system/maxiems-edge.service'
+	snapshot_path "$transaction" 'nginx-site' '/etc/nginx/sites-available/maxiems'
+	snapshot_path "$transaction" 'nginx-enabled' '/etc/nginx/sites-enabled/maxiems'
+	snapshot_path "$transaction" 'nginx-default' '/etc/nginx/sites-enabled/default'
+	snapshot_path "$transaction" 'legacy-nginx-maxicom' '/etc/nginx/sites-enabled/maxicom'
+	snapshot_path "$transaction" 'managed-websocket-config' "$MANAGED_WEBSOCKET_CONFIG"
+	snapshot_service "$transaction" 'maxiems-edge.service'
+	snapshot_service "$transaction" 'nginx.service'
+	local config='/var/lib/maxiems/shared/config'
+	if [[ ! -e "$config" ]]; then
+		/usr/bin/touch -- "$transaction/bootstrap-was-absent"
+	elif [[ -d "$config" && ! -L "$config" ]]; then
+		if [[ -z "$(/usr/bin/find "$config" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+			/usr/bin/touch -- "$transaction/bootstrap-was-absent"
+		fi
+	else
+		die 'shared config path is unsafe'
+	fi
+	/usr/bin/printf 'begun\n' > "$transaction/status"
+	trap - EXIT
+}
+
+quiesce_legacy() {
+	local release_id="$1"
+	active_transaction_is "$release_id" || die 'deployment transaction is not active'
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	[[ "$(/usr/bin/systemctl show --property=LoadState --value openems.service)" == 'loaded' ]] \
+		|| die 'legacy openems.service is not loaded'
+	snapshot_service "$transaction" 'openems.service'
+	/usr/bin/touch -- "$transaction/legacy-openems.present"
+	/usr/bin/systemctl disable --now openems.service
+	! /usr/bin/systemctl is-active --quiet openems.service || die 'legacy openems.service did not stop'
+	local legacy_nginx='/etc/nginx/sites-enabled/maxicom'
+	if [[ -e "$legacy_nginx" || -L "$legacy_nginx" ]]; then
+		[[ -L "$legacy_nginx" \
+			&& "$(/usr/bin/readlink -f -- "$legacy_nginx")" == '/etc/nginx/sites-available/maxicom' ]] \
+			|| die 'legacy maxicom nginx site is not a recognized symbolic link'
+		snapshot_path "$transaction" 'legacy-nginx-maxicom' "$legacy_nginx"
+		/usr/bin/rm -- "$legacy_nginx"
+	fi
+	/usr/sbin/nginx -t
+	/usr/bin/touch -- "$transaction/legacy-quiesced"
+}
+
+stage_release() {
+	local release_id="$1"
+	local upload_token="$2"
+	local expected_hash="$3"
+	active_transaction_is "$release_id" || die 'deployment transaction is not active'
+	local archive="${MAXIEMS_INCOMING}/${upload_token}"
+	local staging="${MAXIEMS_RELEASES}/.staging-${release_id}"
+	local destination="${MAXIEMS_RELEASES}/${release_id}"
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	require_regular_no_symlink "$archive"
+	[[ ! -e "$staging" && ! -L "$staging" ]] || die 'release staging path already exists'
+	[[ ! -e "$destination" && ! -L "$destination" ]] || die 'release already exists'
+	[[ "$(/usr/bin/stat --format='%s' -- "$archive")" -le 2147483648 ]] || die 'release archive is too large'
+	local actual_hash
+	actual_hash="$(/usr/bin/sha256sum -- "$archive")"
+	actual_hash="${actual_hash%% *}"
+	[[ "$actual_hash" == "$expected_hash" ]] || die 'archive hash mismatch'
+	local archive_summary archive_entries archive_uncompressed available
+	archive_summary="$(/usr/bin/zipinfo -t "$archive")"
+	archive_entries="$(/usr/bin/awk '/files?,.*bytes uncompressed/ { print $1 }' <<< "$archive_summary")"
+	archive_uncompressed="$(/usr/bin/awk '/files?,.*bytes uncompressed/ { print $3 }' <<< "$archive_summary")"
+	[[ "$archive_entries" =~ ^[0-9]+$ && "$archive_entries" -le 10001 ]] \
+		|| die 'release archive has too many entries'
+	[[ "$archive_uncompressed" =~ ^[0-9]+$ && "$archive_uncompressed" -le 4294967296 ]] \
+		|| die 'release archive expands beyond the size limit'
+	available="$(/usr/bin/df --block-size=1 --output=avail "$MAXIEMS_RELEASES" | /usr/bin/tail -n1)"
+	available="${available//[[:space:]]/}"
+	[[ "$available" =~ ^[0-9]+$ && "$available" -gt $((archive_uncompressed + 536870912)) ]] \
+		|| die 'insufficient disk space for release staging'
+	/usr/bin/unzip -p "$archive" manifest.json > "$transaction/manifest.candidate"
+	/usr/bin/jq -e --arg release_id "$release_id" '
+		(.formatVersion == 2) and
+		(.releaseId == $release_id) and
+		((.buildTimestampUtc | type) == "string") and
+		(.buildTimestampUtc | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+		((.payloadHash | type) == "string") and
+		(.payloadHash | test("^[0-9a-f]{64}$")) and
+		((.files | type) == "array") and
+		((.files | length) > 0) and ((.files | length) <= 10000) and
+		(all(.files[]; ((.length | type) == "number") and (.length == (.length | floor)) and
+			(.length >= 0) and (.length <= 1073741824))) and
+		(([.files[].length] | add) <= 4294967296)
+	' "$transaction/manifest.candidate" >/dev/null || die 'payload manifest size limits are invalid'
+	local canonical_inventory="$transaction/canonical-payload-inventory"
+	: > "$canonical_inventory"
+	local manifest_path manifest_length manifest_hash
+	while IFS=$'\t' read -r manifest_path manifest_length manifest_hash; do
+		/usr/bin/printf '%s\0%s\0%s\n' "$manifest_path" "$manifest_length" "$manifest_hash" \
+			>> "$canonical_inventory"
+	done < <(/usr/bin/jq -r '.files | sort_by(.path)[] | [.path, (.length | tostring), .sha256] | @tsv' \
+		"$transaction/manifest.candidate")
+	local computed_payload_hash declared_payload_hash
+	computed_payload_hash="$(/usr/bin/sha256sum -- "$canonical_inventory")"
+	computed_payload_hash="${computed_payload_hash%% *}"
+	declared_payload_hash="$(/usr/bin/jq -r '.payloadHash' "$transaction/manifest.candidate")"
+	[[ "$computed_payload_hash" == "$declared_payload_hash" ]] \
+		|| die 'canonical payload hash mismatch'
+	local build_timestamp release_timestamp
+	build_timestamp="$(/usr/bin/jq -r '.buildTimestampUtc' "$transaction/manifest.candidate")"
+	release_timestamp="${build_timestamp:0:4}${build_timestamp:5:2}${build_timestamp:8:2}${build_timestamp:11:2}${build_timestamp:14:2}${build_timestamp:17:2}"
+	[[ "$release_id" == "${release_timestamp}-${computed_payload_hash:0:12}" ]] \
+		|| die 'release ID does not match payload build timestamp and canonical payload hash'
+	local entry
+	while IFS= read -r entry; do
+		[[ -n "$entry" ]] || die 'archive contains an empty path'
+		[[ "$entry" != */ ]] || die 'archive directory entries are forbidden'
+		[[ "$entry" != /* && "$entry" != *\\* && "$entry" != *:* ]] || die 'archive path is unsafe'
+		[[ "$entry" != '..' && "$entry" != '../'* && "$entry" != *'/../'* && "$entry" != *'/..' ]] \
+			|| die 'archive traversal is forbidden'
+	done < <(/usr/bin/unzip -Z1 "$archive")
+	local listing
+	while IFS= read -r listing; do
+		[[ ! "$listing" =~ ^[bcdhlp] ]] || die 'archive contains a link or special file'
+	done < <(/usr/bin/zipinfo -l "$archive")
+	cleanup_stage_release() {
+		/usr/bin/rm -rf -- "$staging"
+	}
+	trap cleanup_stage_release EXIT
+	/usr/bin/install --directory --owner=root --group=root --mode=0700 "$staging"
+	/usr/bin/unzip -q "$archive" -d "$staging"
+	[[ -z "$(/usr/bin/find "$staging" -type l -print -quit)" ]] || die 'extracted links are forbidden'
+	require_regular_no_symlink "$staging/manifest.json"
+	/usr/bin/cmp --silent "$transaction/manifest.candidate" "$staging/manifest.json" \
+		|| die 'extracted manifest does not match the inspected manifest'
+	/usr/bin/jq -e --arg release_id "$release_id" '
+		(.formatVersion == 2) and
+		(.releaseId == $release_id) and
+		((.buildTimestampUtc | type) == "string") and
+		(.buildTimestampUtc | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+		((.payloadHash | type) == "string") and
+		(.payloadHash | test("^[0-9a-f]{64}$")) and
+		((.files | type) == "array") and
+		((.files | length) > 0) and all(.files[];
+			((.path | type) == "string") and ((.length | type) == "number") and (.length >= 0) and
+			((.sha256 | type) == "string") and (.sha256 | test("^[0-9a-f]{64}$"))) and
+		((.files | map(.path) | length) == (.files | map(.path) | unique | length))
+	' "$staging/manifest.json" >/dev/null || die 'payload manifest is invalid'
+	local expected_files="$transaction/expected-files"
+	/usr/bin/printf 'manifest.json\n' > "$expected_files"
+	local hash length path file_hash file_length
+	while IFS=$'\t' read -r hash length path; do
+		[[ -n "$path" && "$path" != /* && "$path" != *\\* && "$path" != *:* ]] \
+			|| die 'manifest path is unsafe'
+		[[ "$path" != '..' && "$path" != '../'* && "$path" != *'/../'* && "$path" != *'/..' ]] \
+			|| die 'manifest traversal is forbidden'
+		require_regular_no_symlink "$staging/$path"
+		file_length="$(/usr/bin/stat --format='%s' -- "$staging/$path")"
+		[[ "$file_length" == "$length" ]] || die 'remote payload length mismatch'
+		file_hash="$(/usr/bin/sha256sum -- "$staging/$path")"
+		file_hash="${file_hash%% *}"
+		[[ "$file_hash" == "$hash" ]] || die 'remote payload hash mismatch'
+		/usr/bin/printf '%s\n' "$path" >> "$expected_files"
+	done < <(/usr/bin/jq -r '.files[] | [.sha256, (.length | tostring), .path] | @tsv' "$staging/manifest.json")
+	/usr/bin/sort -u -o "$expected_files" "$expected_files"
+	/usr/bin/find "$staging" -type f -printf '%P\n' | /usr/bin/sort -u > "$transaction/actual-files"
+	/usr/bin/cmp --silent "$expected_files" "$transaction/actual-files" || die 'payload file inventory mismatch'
+	while IFS= read -r path; do
+		/usr/bin/sync -f -- "$staging/$path"
+	done < "$expected_files"
+	/usr/bin/chown -R root:root -- "$staging"
+	/usr/bin/find "$staging" -type d -exec /usr/bin/chmod 0555 -- {} +
+	/usr/bin/find "$staging" -type f -exec /usr/bin/chmod 0444 -- {} +
+	/usr/bin/mv -T -- "$staging" "$destination"
+	/usr/bin/sync -f -- "$MAXIEMS_RELEASES"
+	/usr/bin/touch -- "$transaction/release-created"
+	/usr/bin/printf 'staged\n' > "$transaction/status"
+	/usr/bin/rm -- "$archive"
+	trap - EXIT
+}
+
+activate_release() {
+	local release_id="$1"
+	active_transaction_is "$release_id" || die 'deployment transaction is not active'
+	require_release_exists "$release_id"
+	local target="${MAXIEMS_RELEASES}/${release_id}"
+	/usr/bin/ln -s -- "$target" "${MAXIEMS_ROOT}/current.next"
+	/usr/bin/mv -Tf -- "${MAXIEMS_ROOT}/current.next" "${MAXIEMS_ROOT}/current"
+	/usr/bin/sync -f -- "$MAXIEMS_ROOT"
+	/usr/bin/printf 'activated\n' > "$(transaction_dir "$release_id")/status"
+}
+
+restore_path() {
+	local transaction="$1"
+	local label="$2"
+	local path="$3"
+	/usr/bin/rm -rf -- "$path"
+	if [[ -f "$transaction/$label.present" ]]; then
+		/usr/bin/cp -a --no-dereference -- "$transaction/$label.backup" "$path"
+	fi
+}
+
+restore_service() {
+	local transaction="$1"
+	local service="$2"
+	if [[ "$(<"$transaction/$service.enabled")" == 'enabled' ]]; then
+		/usr/bin/systemctl enable "$service"
+	else
+		/usr/bin/systemctl disable "$service" >/dev/null 2>&1 || true
+	fi
+	if [[ "$(<"$transaction/$service.active")" == 'active' ]]; then
+		/usr/bin/systemctl restart "$service"
+	else
+		/usr/bin/systemctl stop "$service" >/dev/null 2>&1 || true
+	fi
+}
+
+abort_transaction() {
+	local release_id="$1"
+	active_transaction_is "$release_id" || die 'deployment transaction is not active'
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	/usr/bin/systemctl stop maxiems-edge.service >/dev/null 2>&1 || true
+	if [[ -f "$transaction/previous-release" ]]; then
+		local previous
+		previous="$(<"$transaction/previous-release")"
+		require_release_exists "$previous"
+		/usr/bin/ln -s -- "${MAXIEMS_RELEASES}/${previous}" "${MAXIEMS_ROOT}/current.rollback"
+		/usr/bin/mv -Tf -- "${MAXIEMS_ROOT}/current.rollback" "${MAXIEMS_ROOT}/current"
+	else
+		/usr/bin/rm -f -- "${MAXIEMS_ROOT}/current"
+	fi
+	restore_path "$transaction" 'edge-unit' '/etc/systemd/system/maxiems-edge.service'
+	restore_path "$transaction" 'nginx-site' '/etc/nginx/sites-available/maxiems'
+	restore_path "$transaction" 'nginx-enabled' '/etc/nginx/sites-enabled/maxiems'
+	restore_path "$transaction" 'nginx-default' '/etc/nginx/sites-enabled/default'
+	if [[ -f "$transaction/legacy-nginx-maxicom.present" ]]; then
+		restore_path "$transaction" 'legacy-nginx-maxicom' '/etc/nginx/sites-enabled/maxicom'
+	fi
+	/usr/bin/systemctl daemon-reload
+	if [[ -f "$transaction/bootstrap-created" ]]; then
+		/usr/bin/rm -rf -- /var/lib/maxiems/shared/config
+	fi
+	restore_path "$transaction" 'managed-websocket-config' "$MANAGED_WEBSOCKET_CONFIG"
+	if [[ -f "$transaction/release-created" ]]; then
+		/usr/bin/rm -rf -- "${MAXIEMS_RELEASES}/${release_id:?}"
+	fi
+	/usr/bin/rm -rf -- "${MAXIEMS_RELEASES}/.staging-${release_id:?}"
+	restore_service "$transaction" 'nginx.service'
+	restore_service "$transaction" 'maxiems-edge.service'
+	if [[ -f "$transaction/legacy-openems.present" ]]; then
+		restore_service "$transaction" 'openems.service'
+	fi
+	/usr/bin/printf 'rolled-back\n' > "$transaction/status"
+	/usr/bin/rm -rf -- "$MAXIEMS_DEPLOY_LOCK"
+}
+
+commit_transaction() {
+	local release_id="$1"
+	active_transaction_is "$release_id" || die 'deployment transaction is not active'
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	[[ "$(/usr/bin/readlink -f -- "${MAXIEMS_ROOT}/current")" == "${MAXIEMS_RELEASES}/${release_id}" ]] \
+		|| die 'current release was not activated'
+	/usr/bin/touch -- "${MAXIEMS_RELEASES}/${release_id}/.maxiems-known-good"
+	/usr/bin/chmod 0444 -- "${MAXIEMS_RELEASES}/${release_id}/.maxiems-known-good"
+	if [[ -f "$transaction/previous-release" ]]; then
+		local previous
+		previous="$(<"$transaction/previous-release")"
+		/usr/bin/ln -sfn -- "${MAXIEMS_RELEASES}/${previous}" "${MAXIEMS_ROOT}/previous.next"
+		/usr/bin/mv -Tf -- "${MAXIEMS_ROOT}/previous.next" "${MAXIEMS_ROOT}/previous"
+	else
+		/usr/bin/rm -f -- "${MAXIEMS_ROOT}/previous"
+	fi
+	local release path
+	for path in "${MAXIEMS_RELEASES}"/*; do
+		[[ -d "$path" && ! -L "$path" ]] || continue
+		release="${path##*/}"
+		[[ "$release" == "$release_id" ]] && continue
+		[[ -f "$transaction/previous-release" && "$release" == "$(<"$transaction/previous-release")" ]] && continue
+		/usr/bin/rm -rf -- "$path"
+	done
+	/usr/bin/printf 'committed\n' > "$transaction/status"
+	/usr/bin/rm -rf -- "$MAXIEMS_DEPLOY_LOCK"
+}
+
+transaction_status() {
+	local release_id="$1"
+	local transaction
+	transaction="$(transaction_dir "$release_id")"
+	[[ -d "$transaction" && ! -L "$transaction" ]] || die 'deployment transaction does not exist'
+	/usr/bin/cat -- "$transaction/status"
+}
+
+service_action() {
+	/usr/bin/systemctl "$1" maxiems-edge.service
+}
+
+has_public_ipv4_listener() {
+	local port="$1"
+	local listeners="$2"
+	/usr/bin/awk '{print $4}' <<< "$listeners" \
+		| /usr/bin/grep -Eq "^(0\\.0\\.0\\.0|\\*|\\[::\\]):${port}$" \
+		|| return 1
+	# A wildcard displayed by ss can be an IPv6-only socket. Verify an actual
+	# IPv4 TCP connection before treating it as a public IPv4 listener.
+	( : > "/dev/tcp/127.0.0.1/${port}" ) 2>/dev/null
+}
+
+listeners_for_port() {
+	local port="$1"
+	local listeners="$2"
+	/usr/bin/awk -v port="$port" '$4 ~ (":" port "$")' <<< "$listeners"
+}
+
+nginx_action() {
+	if [[ "$1" == 'validate' ]]; then
+		/usr/sbin/nginx -t
+	else
+		/usr/sbin/nginx -t
+		/usr/bin/systemctl enable nginx.service >/dev/null
+		/usr/bin/systemctl reload-or-restart nginx.service
+	fi
+}
+
+verify_status() {
+	/usr/bin/systemctl is-active --quiet maxiems-edge.service || die 'MAXiEMS Edge service is not active'
+	/usr/bin/systemctl is-enabled --quiet maxiems-edge.service || die 'MAXiEMS Edge service is not enabled'
+	/usr/bin/systemctl is-active --quiet nginx.service || die 'nginx is not active'
+	/usr/bin/systemctl is-enabled --quiet nginx.service || die 'nginx is not enabled'
+	/usr/bin/curl --fail --silent --show-error --output /dev/null --connect-timeout 3 --max-time 10 \
+		http://127.0.0.1/ || die 'local nginx UI did not respond successfully'
+	local current
+	current="$(/usr/bin/readlink -f -- "${MAXIEMS_ROOT}/current")"
+	[[ "$current" =~ ^${MAXIEMS_RELEASES}/[0-9]{14}-[0-9a-f]{12}$ ]] \
+		|| die 'current release link is invalid'
+	require_regular_no_symlink "$current/manifest.json"
+	local expected path actual
+	while IFS=$'\t' read -r expected path; do
+		require_regular_no_symlink "$current/$path"
+		actual="$(/usr/bin/sha256sum -- "$current/$path")"
+		[[ "${actual%% *}" == "$expected" ]] || die 'installed release hash mismatch'
+	done < <(/usr/bin/jq -r '.files[] | [.sha256, .path] | @tsv' "$current/manifest.json")
+	if [[ "$(/usr/bin/systemctl show --property=LoadState --value openems.service)" == 'loaded' ]]; then
+		! /usr/bin/systemctl is-active --quiet openems.service || die 'legacy OpenEMS service is still active'
+		! /usr/bin/systemctl is-enabled --quiet openems.service || die 'legacy OpenEMS service is still enabled'
+	fi
+	local port listeners port_listeners
+	listeners="$(/usr/bin/ss -H -lnt)"
+	for port in 8084 502; do
+		port_listeners="$(listeners_for_port "$port" "$listeners")"
+		[[ -z "$port_listeners" ]] && continue
+		if /usr/bin/awk '{print $4}' <<< "$port_listeners" | /usr/bin/grep -Eqv '^(127\.0\.0\.1|\[::ffff:127\.0\.0\.1\]|\[::1\]):[0-9]+$'; then
+			die "port ${port} is exposed outside loopback policy"
+		fi
+	done
+	for port in 8080 8085; do
+		port_listeners="$(listeners_for_port "$port" "$listeners")"
+		[[ -n "$port_listeners" ]] || die "public port ${port} is not listening"
+		has_public_ipv4_listener "$port" "$port_listeners" \
+			|| die "port ${port} has no IPv4-reachable wildcard listener"
+	done
+	/usr/bin/printf '%s\n' "$current"
+}
+
+diagnostics() {
+	# This operation is intentionally read-only and bounded. It is called only
+	# after a deployment failure so the operator can see evidence before rollback.
+	local output
+	output="$({
+		/usr/bin/printf '%s\n' '=== health-check ports 8080, 8085, 8084, 502 ==='
+		/usr/bin/ss -H -lnt 2>&1 | /usr/bin/awk '$4 ~ /:(8080|8085|8084|502)$/' || true
+		/usr/bin/printf '%s\n' '=== maxiems-edge systemd status ==='
+		/usr/bin/systemctl status maxiems-edge.service --no-pager --full --lines=30 2>&1 || true
+		/usr/bin/printf '%s\n' '=== maxiems-edge recent journal ==='
+		/usr/bin/journalctl --unit=maxiems-edge.service --no-pager --output=short-iso --lines=80 2>&1 || true
+		/usr/bin/printf '%s\n' '=== TCP listeners ==='
+		/usr/bin/ss -H -lnt 2>&1 | /usr/bin/head --lines=100 || true
+	} 2>&1)"
+	/usr/bin/printf '%s\n' "${output:0:32768}"
+}
+
+tailscale_action() {
+	case "$1" in
+		status) /usr/bin/tailscale status --json ;;
+		up) /usr/bin/tailscale up --accept-routes=false --advertise-routes= --advertise-exit-node=false ;;
+		down) /usr/bin/tailscale down ;;
+	esac
+}
+
+case "$1" in
+	install-prerequisites) install_prerequisites ;;
+	runtime-config)
+		/usr/local/libexec/maxiems-runtime-config-ops
+		migrate_managed_websocket
+		;;
+	bms-setup) /usr/local/libexec/maxiems-bms-setup setup "$2" ;;
+	bms-ready) /usr/local/libexec/maxiems-bms-setup ready ;;
+	bootstrap-status) bootstrap_status ;;
+	current-release)
+		if [[ -L "${MAXIEMS_ROOT}/current" ]]; then
+			/usr/bin/basename -- "$(/usr/bin/readlink -f -- "${MAXIEMS_ROOT}/current")"
+		else
+			/usr/bin/printf 'absent\n'
+		fi
+		;;
+	bootstrap-config) install_bootstrap_config "$2" "$3" ;;
+	begin) begin_transaction "$2" ;;
+	quiesce-legacy) quiesce_legacy "$2" ;;
+	stage) stage_release "$2" "$3" "$4" ;;
+	activate) activate_release "$2" ;;
+	commit) commit_transaction "$2" ;;
+	abort|rollback) abort_transaction "$2" ;;
+	transaction-status) transaction_status "$2" ;;
+	service) service_action "$2" ;;
+	nginx) nginx_action "$2" ;;
+	tailscale) tailscale_action "$2" ;;
+	status)
+		verify_status
+		;;
+	diagnostics)
+		diagnostics
+		;;
+	reboot) /usr/bin/systemctl reboot --no-block ;;
+	*) die 'internal operation mismatch' ;;
+esac

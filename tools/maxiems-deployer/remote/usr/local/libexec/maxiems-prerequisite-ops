@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$(/usr/bin/id -u)" == 0 && $# == 0 ]] || exit 64
+readonly WORK=/var/lib/maxiems/state/offline-packages
+shopt -s nullglob
+packages=("$WORK"/*.deb)
+(( ${#packages[@]} > 0 )) || { echo 'Missing offline Ubuntu packages' >&2; exit 66; }
+# Build a local-only apt index from the verified package cache. Installing by
+# package name permits keeping newer installed versions and resolving only the
+# dependencies actually needed; passing every .deb would upgrade unrelated OS packages.
+/usr/bin/python3 - "$WORK" <<'PYINDEX'
+import hashlib, pathlib, subprocess, sys
+root = pathlib.Path(sys.argv[1])
+with (root / 'Packages').open('w') as index:
+    for package in sorted(root.glob('*.deb')):
+        control = subprocess.check_output(['/usr/bin/dpkg-deb', '-f', str(package)], text=True)
+        index.write(control.rstrip() + '\nFilename: ' + package.name + '\nSize: ' + str(package.stat().st_size) + '\nSHA256: ' + hashlib.sha256(package.read_bytes()).hexdigest() + '\n\n')
+(root / 'offline.list').write_text('deb [trusted=yes] file:' + str(root) + ' ./\n')
+PYINDEX
+apt_options=(-o DPkg::Lock::Timeout=120 -o APT::Sandbox::User=root
+ -o "Dir::Etc::sourcelist=$WORK/offline.list" -o Dir::Etc::sourceparts=-
+ -o "Dir::State::lists=$WORK/lists" -o "Dir::Cache::archives=$WORK/cache")
+/usr/bin/mkdir -p "$WORK/lists/partial" "$WORK/cache/partial"
+/usr/bin/apt-get "${apt_options[@]}" update
+# The only source is the root-owned local repository. No network downloads.
+DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get "${apt_options[@]}" --yes --no-upgrade \
+ -o Dpkg::Options::=--force-confold install openjdk-21-jre-headless nginx postgresql python3 \
+ network-manager jq unzip curl ca-certificates sudo openssh-server iproute2 procps util-linux
+for program in /usr/bin/java /usr/sbin/nginx /usr/bin/psql /usr/bin/python3 /usr/bin/nmcli /usr/bin/jq /usr/bin/unzip /usr/bin/curl; do
+ [[ -x "$program" ]] || { echo "Missing prerequisite $program" >&2; exit 66; }
+done
+[[ "$(/usr/bin/java -version 2>&1 | /usr/bin/head -n1)" == *'21.'* ]]
+/usr/sbin/nginx -t
+/usr/bin/systemctl enable --now postgresql.service
+# NetworkManager is required by BMS helpers; do not take over existing interfaces here.
+/usr/bin/systemctl enable --now NetworkManager.service

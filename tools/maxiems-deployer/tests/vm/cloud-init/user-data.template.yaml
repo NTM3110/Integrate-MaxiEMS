@@ -1,0 +1,86 @@
+#cloud-config
+users:
+  - default
+  - name: fixture-admin
+    gecos: MAXiEMS fixture administrator
+    groups: [adm, sudo]
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - __ADMIN_PUBLIC_KEY__
+ssh_pwauth: false
+disable_root: true
+preserve_hostname: false
+write_files:
+  - path: /etc/maxiems-fixture/marker.json
+    owner: root:root
+    permissions: '0444'
+    content: |
+      {"schemaVersion":1,"fixtureId":"__FIXTURE_ID__","provider":"qemu","os":"24.04","architecture":"__ARCHITECTURE__"}
+  - path: /usr/local/sbin/maxiems-fixture-fault
+    owner: root:root
+    permissions: '0750'
+    content: |
+      #!/bin/sh
+      set -eu
+      action="${1:-}"
+      fault="${2:-}"
+      case "$fault" in
+        disk|checksum|helper|systemd|nginx|tailscale|jsonrpc|package-mirror|network) ;;
+        *) echo "unsupported fixture fault" >&2; exit 64 ;;
+      esac
+      mkdir -p /run/maxiems-fixture
+      case "$action" in
+        enable) : > "/run/maxiems-fixture/fault-$fault" ;;
+        disable) rm -f "/run/maxiems-fixture/fault-$fault" ;;
+        status) test -f "/run/maxiems-fixture/fault-$fault" ;;
+        *) echo "usage: maxiems-fixture-fault enable|disable|status FAULT" >&2; exit 64 ;;
+      esac
+  - path: /usr/local/sbin/maxiems-fixture-network
+    owner: root:root
+    permissions: '0750'
+    content: |
+      #!/bin/sh
+      set -eu
+      ip link show maxiems-fake >/dev/null 2>&1 || ip link add maxiems-fake type dummy
+      ip address replace 192.0.2.10/24 dev maxiems-fake
+      ip link set maxiems-fake up
+  - path: /etc/systemd/system/maxiems-fixture-network.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=MAXiEMS deterministic fake network interface
+      After=network-pre.target
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/maxiems-fixture-network
+      RemainAfterExit=yes
+      [Install]
+      WantedBy=multi-user.target
+  - path: /etc/apt/apt.conf.d/99maxiems-fixture
+    owner: root:root
+    permissions: '0644'
+    content: |
+      Acquire::http::Proxy "DIRECT";
+      Acquire::https::Proxy "DIRECT";
+  - path: /etc/sudoers.d/maxiems-fixture-fault
+    owner: root:root
+    permissions: '0440'
+    content: |
+      fixture-admin ALL=(root) NOPASSWD: /usr/local/sbin/maxiems-fixture-fault *
+  - path: /etc/systemd/journald.conf.d/maxiems-fixture.conf
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=128M
+runcmd:
+  - [mkdir, -p, /var/log/journal]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, maxiems-fixture-network.service]
+  - [systemctl, restart, systemd-journald]
+  - [bash, -c, 'printf "%s fixture-ready\n" "$(date --iso-8601=seconds)" >> /var/log/maxiems-fixture-audit.log']
+final_message: MAXiEMS fixture __FIXTURE_ID__ ready

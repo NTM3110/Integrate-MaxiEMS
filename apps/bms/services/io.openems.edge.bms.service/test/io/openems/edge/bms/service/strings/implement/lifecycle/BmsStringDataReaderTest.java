@@ -17,6 +17,9 @@ import org.junit.Test;
 import io.openems.edge.bms.service.calculation.contracts.BmsStringCalculator;
 import io.openems.edge.bms.service.monitoring.contracts.BmsMonitoringSnapshotProvider;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurementQuality;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.CellMeasurements;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.StringMeasurements;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.EstimatorProvenance;
 import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.EstimatorQuality;
@@ -269,9 +272,26 @@ public class BmsStringDataReaderTest {
 		case "stringKey" -> "str1";
 		case "latestFrame" -> {
 			var snapshot = source.get();
+			var cells = snapshot.cells().entrySet().stream().collect(java.util.stream.Collectors.toMap(
+					Map.Entry::getKey, entry -> {
+						var cell = entry.getValue();
+						return new CellMeasurements(cell.cellId(), cell.voltage(),
+								cell.internalResistance() == null ? null : cell.internalResistance().doubleValue(),
+								cell.temperature(), cell.soc(), cell.soh(), cell.availabilityWarning(), null,
+								cell.socEstimator(), cell.sohEstimator(),
+								cell.measuredAt() == null ? snapshot.capturedAt() : cell.measuredAt(), 0L,
+								CellMeasurementQuality.FRESH);
+					}));
+			var string = new StringMeasurements(snapshot.stringVoltage(), snapshot.midpointVoltage(),
+					snapshot.stringCurrent(), null, null, snapshot.minVoltage(), snapshot.maxVoltage(),
+					snapshot.averageVoltage(), snapshot.maxResistance(), snapshot.averageResistance(),
+					snapshot.ambientTemperature(), snapshot.maxTemperature(), snapshot.averageTemperature(),
+					snapshot.stringSoc(), null, snapshot.stringSoh(), snapshot.cells().values().stream()
+							.map(BmsCalculationSnapshot.Cell::soh).filter(java.util.Objects::nonNull)
+							.min(Double::compare).orElse(null));
 			yield new BmsMonitoringSnapshot("str1", snapshot.generation(), snapshot.sequence(),
 					java.time.Instant.ofEpochMilli(snapshot.capturedAt()), snapshot.currentMeasuredAt(),
-					snapshot.currentQuality(), false, null, null, Map.of(), null, null, null, null,
+					snapshot.currentQuality(), false, null, string, cells, null, null, null, null,
 					java.util.Set.of(), 0, List.of(), null, snapshot, snapshot.generation(), 1, Map.of());
 		}
 		default -> null;

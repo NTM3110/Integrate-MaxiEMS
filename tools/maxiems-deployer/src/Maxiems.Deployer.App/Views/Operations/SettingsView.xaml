@@ -1,0 +1,35 @@
+<UserControl x:Class="Maxiems.Deployer.App.Views.Operations.SettingsView"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		AutomationProperties.Name="{DynamicResource Settings.Automation}">
+	<UserControl.Resources><BooleanToVisibilityConverter x:Key="BooleanVisibility"/></UserControl.Resources>
+	<ScrollViewer>
+		<StackPanel Margin="30" MaxWidth="760" HorizontalAlignment="Left">
+			<TextBlock Text="{DynamicResource Settings.Title}" Style="{DynamicResource PageTitle}" AutomationProperties.HeadingLevel="Level1"/>
+			<TextBlock Text="{DynamicResource Settings.Subtitle}" Style="{DynamicResource PageSubtitle}"/>
+			<Border Style="{DynamicResource MetricCard}">
+				<StackPanel>
+					<TextBlock Text="{DynamicResource Settings.BackupTitle}" Style="{DynamicResource SectionTitle}"/>
+					<Label Target="{Binding ElementName=BackupBox}" Content="{DynamicResource Settings.BackupDestination}"/>
+					<TextBox x:Name="BackupBox" Text="{Binding BackupDirectory}" AutomationProperties.Name="{DynamicResource Settings.BackupAutomation}"/>
+					<TextBlock Text="{DynamicResource Settings.BackupHelp}" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0"/>
+					<StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+						<Button Content="{DynamicResource Settings.CreateBackup}" Command="{Binding CreateBackupCommand}"/>
+						<Button Content="{DynamicResource Settings.Export}" Command="{Binding ExportCommand}" Margin="10,0,0,0"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+			<CheckBox Content="{DynamicResource Settings.Advanced}" IsChecked="{Binding AdvancedVisible}" Margin="0,18,0,0"/>
+			<Border Style="{DynamicResource MetricCard}" Margin="0,12,0,0" Visibility="{Binding AdvancedVisible, Converter={StaticResource BooleanVisibility}}">
+				<StackPanel>
+					<TextBlock Text="{DynamicResource Settings.RecoveryTitle}" Style="{DynamicResource SectionTitle}"/>
+					<Label Target="{Binding ElementName=RestoreBox}" Content="{DynamicResource Settings.Archive}"/>
+					<TextBox x:Name="RestoreBox" Text="{Binding RestoreArchivePath}" AutomationProperties.Name="{DynamicResource Settings.ArchiveAutomation}"/>
+					<Button Content="{DynamicResource Settings.Preview}" Command="{Binding PreviewRestoreCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+					<CheckBox Content="{DynamicResource Settings.Risk}" IsChecked="{Binding DestructiveActionConfirmed}" Margin="0,10,0,0" AutomationProperties.Name="{DynamicResource Settings.RiskAutomation}"/>
+					<Button Content="{DynamicResource Settings.Restore}" Command="{Binding RestoreCommand}" HorizontalAlignment="Left" Margin="0,10,0,0" Style="{DynamicResource DangerButton}"/>
+				</StackPanel>
+			</Border>
+			<TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,14,0,0" AutomationProperties.LiveSetting="Polite"/>
+		</StackPanel>
+	</ScrollViewer>
+</UserControl>

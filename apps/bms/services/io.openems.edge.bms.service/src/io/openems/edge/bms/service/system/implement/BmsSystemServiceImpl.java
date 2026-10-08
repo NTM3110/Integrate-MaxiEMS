@@ -15,7 +15,7 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.common.exceptions.OpenemsException;
 
-/** Runs only an exact sudoers-approved systemctl reboot command. */
+/** Runs only the sudoers-approved appliance reboot helper. */
 @Designate(ocd = Config.class)
 @Component(name = "BMS.System", immediate = true)
 public class BmsSystemServiceImpl implements BmsSystemService {
@@ -31,11 +31,7 @@ public class BmsSystemServiceImpl implements BmsSystemService {
 
 	@Override
 	public void reboot() throws OpenemsException {
-		var systemctl = this.config.systemctlPath();
-		if (!"/usr/bin/systemctl".equals(systemctl)) {
-			throw new OpenemsException("Unsupported systemctl command path");
-		}
-		this.run("sudo", "-n", systemctl, "reboot", "--no-block");
+		this.run("/usr/bin/sudo", "-n", "/usr/local/sbin/maxiems-system-helper", "reboot");
 	}
 
 	private void run(String... command) throws OpenemsException {

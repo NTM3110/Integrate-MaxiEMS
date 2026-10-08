@@ -339,6 +339,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		var sohs = new Double[count];
 		var irs = new Double[count];
 		var availabilityWarnings = new String[count];
+		var cellMeasuredAts = new Long[count];
+		var cellQualities = new BmsCalculationSnapshot.CellQuality[count];
 		/*
 		 * A TC ambient/current value alone is not a successful BMS interval: if all
 		 * TA modules fail, refreshing the snapshot timestamp from TC would keep
@@ -360,11 +362,15 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 				// calculated and included in the string aggregate.
 				availabilityWarnings[offset] = "MISSING_COMPONENT";
 				copyPreviousCell(previousSnapshot, cell, offset, voltages, temperatures, resistances, socs, sohs, irs);
+				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, false), offset,
+						cellMeasuredAts, cellQualities);
 				continue;
 			}
 			if (ta instanceof ModbusComponent modbusComponent && modbusComponent.getModbusCommunicationFailed()) {
 				availabilityWarnings[offset] = "MODBUS_COMMUNICATION_FAILED";
 				copyPreviousCell(previousSnapshot, cell, offset, voltages, temperatures, resistances, socs, sohs, irs);
+				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, false), offset,
+						cellMeasuredAts, cellQualities);
 				continue;
 			}
 			var voltageRaw = ta.getBatteryVoltage().get();
@@ -373,11 +379,18 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 			if (voltageRaw == null && temperatureRaw == null && resistanceRaw == null) {
 				availabilityWarnings[offset] = "DATA_UNAVAILABLE";
 				copyPreviousCell(previousSnapshot, cell, offset, voltages, temperatures, resistances, socs, sohs, irs);
+				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, false), offset,
+						cellMeasuredAts, cellQualities);
 				continue;
 			}
 			hasTaMeasurements = true;
 			if (voltageRaw == null || temperatureRaw == null || resistanceRaw == null) {
 				availabilityWarnings[offset] = "PARTIAL_DATA";
+				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, false), offset,
+						cellMeasuredAts, cellQualities);
+			} else {
+				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, true), offset,
+						cellMeasuredAts, cellQualities);
 			}
 			socs[offset] = previousCell(previousSnapshot, cell, BmsCalculationSnapshot.Cell::soc);
 			sohs[offset] = previousCell(previousSnapshot, cell, BmsCalculationSnapshot.Cell::soh);
@@ -510,7 +523,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 				capturedAt = this.lastSuccessfulCaptureAt != 0 ? this.lastSuccessfulCaptureAt : this.firstFailedCycleAt;
 			}
 			this.publishSnapshot(previousSnapshot, currentProvenance, ambientRaw, count, voltages, temperatures,
-					resistances, socs, sohs, irs, availabilityWarnings, stringWarning, capturedAt, estimatorInputs);
+					resistances, socs, sohs, irs, availabilityWarnings, cellMeasuredAts, cellQualities,
+					stringWarning, capturedAt, estimatorInputs);
 		}
 		return hasTaMeasurements;
 	}
@@ -739,7 +753,9 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 			Integer ambientRaw, int count,
 			Double[] voltages,
 			Double[] temperatures, Double[] resistances, Double[] socs, Double[] sohs, Double[] irs,
-			String[] availabilityWarnings, String stringWarning, long capturedAt, EstimatorInputs estimatorInputs) {
+			String[] availabilityWarnings, Long[] cellMeasuredAts,
+			BmsCalculationSnapshot.CellQuality[] cellQualities, String stringWarning, long capturedAt,
+			EstimatorInputs estimatorInputs) {
 		var cells = new LinkedHashMap<Integer, BmsCalculationSnapshot.Cell>(count);
 		for (var offset = 0; offset < count; offset++) {
 			var resistance = resistances[offset] == null ? null : resistances[offset].intValue();
@@ -750,7 +766,9 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 					this.calculatedSocProvenance.getOrDefault(cellId,
 							previous == null ? null : previous.socEstimator()),
 					this.calculatedSohProvenance.getOrDefault(cellId,
-							previous == null ? null : previous.sohEstimator())));
+							previous == null ? null : previous.sohEstimator()), cellMeasuredAts[offset],
+					cellQualities[offset] == null ? BmsCalculationSnapshot.CellQuality.UNAVAILABLE
+							: cellQualities[offset]));
 		}
 
 		var maxVoltage = Helper.getMaxVoltageBattery(count, voltages);
@@ -950,6 +968,32 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		sohs[offset] = cell.soh();
 		irs[offset] = cell.ir();
 	}
+
+	static CellProvenance cellProvenance(BmsCalculationSnapshot snapshot, int cellId, long cycleAt,
+			boolean completeMeasurement) {
+		if (completeMeasurement) {
+			return new CellProvenance(cycleAt, BmsCalculationSnapshot.CellQuality.FRESH);
+		}
+		var previous = previousCell(snapshot, cellId);
+		/*
+		 * A partial cycle may only form a retained cell from a previously complete
+		 * physical sample. Otherwise the three values would have mixed or unknown
+		 * provenance, so monitoring must project the whole cell as unavailable.
+		 */
+		if (previous == null || previous.voltage() == null || previous.temperature() == null
+				|| previous.internalResistance() == null || previous.measuredAt() == null) {
+			return new CellProvenance(null, BmsCalculationSnapshot.CellQuality.UNAVAILABLE);
+		}
+		return new CellProvenance(previous.measuredAt(), BmsCalculationSnapshot.CellQuality.RETAINED);
+	}
+
+	private static void applyCellProvenance(CellProvenance provenance, int offset, Long[] measuredAts,
+			BmsCalculationSnapshot.CellQuality[] qualities) {
+		measuredAts[offset] = provenance.measuredAt();
+		qualities[offset] = provenance.quality();
+	}
+
+	static record CellProvenance(Long measuredAt, BmsCalculationSnapshot.CellQuality quality) { }
 
 	private void writeCalculatedTcChannels(BmsHuasuTc tc, int count, Double[] voltages, Double[] temperatures,
 			Double[] resistances, Double[] socs, Double[] sohs) {

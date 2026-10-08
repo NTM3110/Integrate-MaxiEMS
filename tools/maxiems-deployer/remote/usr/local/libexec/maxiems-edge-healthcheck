@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly timeout_seconds="${1:-}"
+[[ "$timeout_seconds" == '180' ]] || exit 64
+readonly deadline=$((SECONDS + timeout_seconds))
+while (( SECONDS < deadline )); do
+	status="$(/usr/bin/curl --silent --output /dev/null --write-out '%{http_code}' \
+		--connect-timeout 2 --max-time 3 http://127.0.0.1:8084/rest/ || true)"
+	if [[ "$status" != '000' ]]; then
+		exit 0
+	fi
+	/usr/bin/sleep 2
+done
+/usr/bin/printf 'OpenEMS REST listener did not become ready before timeout\n' >&2
+exit 1

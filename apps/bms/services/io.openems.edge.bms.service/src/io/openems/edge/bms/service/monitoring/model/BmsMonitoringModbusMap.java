@@ -1,145 +1,197 @@
 package io.openems.edge.bms.service.monitoring.model;
 
-import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot;
-
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Function;
-import java.util.zip.CRC32;
 
-import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.CurrentQuality;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.Alarm;
 import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.AlarmEvaluation;
-import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.ModeQuality;
-import io.openems.edge.bms.service.monitoring.model.BmsMonitoringSnapshot.OperatingMode;
 
 /**
  * Versioned Modbus input-register projection of one atomic monitoring frame.
- * Addresses are workbook-style, one-based addresses. Multi-word values use
- * network word order (most-significant word first).
+ * Map keys are one-based addresses relative to a string block. The process
+ * image adds {@code stringId * STRING_STRIDE}; multi-word values use network
+ * word order (most-significant word first).
  */
 public final class BmsMonitoringModbusMap {
 
-	public static final int CONTRACT_VERSION = 1;
-	public static final int FIRST_ADDRESS = 6001;
-	public static final int LAST_ADDRESS = 6134;
+	public static final int CONTRACT_VERSION = 3;
+	public static final int FIRST_RELATIVE_ADDRESS = 1;
+	public static final int LAST_RELATIVE_ADDRESS = 36;
+	public static final int ALARM_ACTIVE_MASK_ADDRESS = 35;
+	public static final int ALARM_VALIDITY_MASK_ADDRESS = 36;
+	public static final int STRING_STRIDE = 1_000;
+	public static final int MAX_STRING_INDEX = 10;
 	public static final int UNAVAILABLE_WORD = 0xffff;
 	public static final int UNAVAILABLE_S32 = 0x8000_0000;
 
-	private static final int FIRST_ALARM_ADDRESS = 6061;
-	private static final int FIRST_MEASUREMENT_ADDRESS = 6101;
+	/** Register representation used by the stable monitoring contract. */
+	public enum RegisterValueType {
+		BITMASK_16, SIGNED_32
+	}
+
+	/** One stable alarm bit shared by the active and validity masks. */
+	public record AlarmBit(int bit, Alarm alarm, String label) {
+		public RegisterValueType type() {
+			return RegisterValueType.BITMASK_16;
+		}
+
+		public int mask() {
+			return 1 << this.bit;
+		}
+	}
+
+	/**
+	 * Ordered string-level measurement catalog. Each value occupies two registers
+	 * as a signed 32-bit integer in network word order.
+	 */
+	public enum MeasurementRegister {
+		BATTERY_VOLTAGE(1, "Battery Voltage", "V", 100,
+				BmsMonitoringSnapshot.StringMeasurements::batteryVoltageV),
+		MIDPOINT_VOLTAGE(3, "Midpoint Voltage", "V", 100,
+				BmsMonitoringSnapshot.StringMeasurements::midpointVoltageV),
+		BATTERY_CURRENT(5, "Battery Current", "A", 100,
+				BmsMonitoringSnapshot.StringMeasurements::batteryCurrentA),
+		BATTERY_POWER(7, "Battery Power", "W", 1,
+				BmsMonitoringSnapshot.StringMeasurements::batteryPowerW),
+		FLOAT_CURRENT(9, "Float Current", "A", 100,
+				BmsMonitoringSnapshot.StringMeasurements::floatCurrentA),
+		MIN_CELL_VOLTAGE(11, "Min Cell Voltage", "V", 1000,
+				BmsMonitoringSnapshot.StringMeasurements::minCellVoltageV),
+		MAX_CELL_VOLTAGE(13, "Max Cell Voltage", "V", 1000,
+				BmsMonitoringSnapshot.StringMeasurements::maxCellVoltageV),
+		AVERAGE_CELL_VOLTAGE(15, "Average Cell Voltage", "V", 1000,
+				BmsMonitoringSnapshot.StringMeasurements::averageCellVoltageV),
+		MAX_CELL_RESISTANCE(17, "Max Cell Resistance", "uOhm", 1,
+				BmsMonitoringSnapshot.StringMeasurements::maxCellResistanceUohm),
+		AVERAGE_CELL_RESISTANCE(19, "Average Cell Resistance", "uOhm", 1,
+				BmsMonitoringSnapshot.StringMeasurements::averageCellResistanceUohm),
+		AMBIENT_TEMPERATURE(21, "Ambient Temperature", "degC", 10,
+				BmsMonitoringSnapshot.StringMeasurements::ambientTemperatureC),
+		MAX_CELL_TEMPERATURE(23, "Max Cell Temperature", "degC", 10,
+				BmsMonitoringSnapshot.StringMeasurements::maxCellTemperatureC),
+		AVERAGE_CELL_TEMPERATURE(25, "Average Cell Temperature", "degC", 10,
+				BmsMonitoringSnapshot.StringMeasurements::averageCellTemperatureC),
+		BATTERY_SOC(27, "Battery SOC", "%", 100,
+				BmsMonitoringSnapshot.StringMeasurements::batterySocPct),
+		REMAINING_DISCHARGE_TIME(29, "Remaining Discharge Time", "h", 100,
+				BmsMonitoringSnapshot.StringMeasurements::remainingDischargeHours),
+		BATTERY_SOH(31, "Battery SOH", "%", 100,
+				BmsMonitoringSnapshot.StringMeasurements::batterySohPct),
+		MINIMUM_CELL_SOH(33, "Minimum Cell SOH", "%", 100,
+				BmsMonitoringSnapshot.StringMeasurements::minimumCellSohPct);
+
+		private final int address;
+		private final String label;
+		private final String unit;
+		private final int scale;
+		private final Function<BmsMonitoringSnapshot.StringMeasurements, ? extends Number> getter;
+
+		MeasurementRegister(int address, String label, String unit, int scale,
+				Function<BmsMonitoringSnapshot.StringMeasurements, ? extends Number> getter) {
+			this.address = address;
+			this.label = label;
+			this.unit = unit;
+			this.scale = scale;
+			this.getter = getter;
+		}
+
+		public int address() {
+			return this.address;
+		}
+
+		public int width() {
+			return 2;
+		}
+
+		public RegisterValueType type() {
+			return RegisterValueType.SIGNED_32;
+		}
+
+		public String label() {
+			return this.label;
+		}
+
+		public String unit() {
+			return this.unit;
+		}
+
+		public int scale() {
+			return this.scale;
+		}
+
+		private Number value(BmsMonitoringSnapshot.StringMeasurements values) {
+			return this.getter.apply(values);
+		}
+	}
+
+	private static final List<AlarmBit> ALARM_BITS = List.of(
+			new AlarmBit(0, Alarm.LOW_CELL_VOLTAGE, "Low Cell Voltage Alarm"),
+			new AlarmBit(1, Alarm.HIGH_CELL_VOLTAGE, "High Cell Voltage Alarm"),
+			new AlarmBit(2, Alarm.BATTERY_VOLTAGE_LOW, "Battery Voltage Low"),
+			new AlarmBit(3, Alarm.BATTERY_VOLTAGE_HIGH, "Battery Voltage High"),
+			new AlarmBit(4, Alarm.CELL_RESISTANCE, "Cell Resistance Alarm"),
+			new AlarmBit(5, Alarm.CELL_TEMPERATURE, "Cell Temperature Alarm"),
+			new AlarmBit(6, Alarm.FLOAT_CHARGE_OVERCURRENT, "Float Charge Overcurrent Alarm"),
+			new AlarmBit(7, Alarm.CHARGE_OVERCURRENT, "Charge Overcurrent Alarm"),
+			new AlarmBit(8, Alarm.LOW_SOC, "Low SOC Alarm"),
+			new AlarmBit(9, Alarm.HIGH_AMBIENT_TEMPERATURE, "High Ambient Temperature"),
+			new AlarmBit(10, Alarm.MIDPOINT_VOLTAGE, "Midpoint Voltage Alarm"),
+			new AlarmBit(11, Alarm.SENSOR_MODULE_FAILURE, "Sensor/Module Failure"));
 
 	private BmsMonitoringModbusMap() {
 	}
 
-	/** Returns whether this address belongs to the versioned monitoring block. */
-	public static boolean isMonitoringAddress(int address) {
-		return address >= FIRST_ADDRESS && address <= LAST_ADDRESS;
+	/** Ordered alarm-bit contract shared by both alarm masks. */
+	public static List<AlarmBit> alarmBits() {
+		return ALARM_BITS;
+	}
+
+	/** Ordered measurement-register contract. */
+	public static List<MeasurementRegister> measurementRegisters() {
+		return List.of(MeasurementRegister.values());
+	}
+
+	/** Resolves a zero-based protocol offset to its string ID. */
+	public static int stringIndexForOffset(int offset) {
+		if (offset < STRING_STRIDE) return -1;
+		var stringIndex = offset / STRING_STRIDE;
+		return stringIndex <= MAX_STRING_INDEX ? stringIndex : -1;
+	}
+
+	/** Returns whether this relative address belongs to the monitoring block. */
+	public static boolean isMonitoringAddress(int relativeAddress) {
+		return relativeAddress >= FIRST_RELATIVE_ADDRESS && relativeAddress <= LAST_RELATIVE_ADDRESS;
 	}
 
 	/**
-	 * Projects a complete frame. A null frame still exposes the contract version
-	 * and availability flag; every other mapped value is an explicit sentinel.
+	 * Projects all 36 relative registers from one frame. A null frame exposes an
+	 * explicit sentinel for every measurement and zero for both alarm masks.
 	 */
 	public static Map<Integer, Integer> registers(BmsMonitoringSnapshot frame) {
 		var result = new LinkedHashMap<Integer, Integer>();
-		result.put(6001, CONTRACT_VERSION);
-		result.put(6002, frame == null ? 0 : 1);
-		result.put(6003, frameQuality(frame));
-		result.put(6004, frame == null ? UNAVAILABLE_WORD : currentQuality(frame.currentQuality()));
-		result.put(6005, frame == null || frame.operatingMode() == null ? UNAVAILABLE_WORD
-				: operatingMode(frame.operatingMode().mode()));
-		result.put(6006, frame == null || frame.operatingMode() == null ? UNAVAILABLE_WORD
-				: modeQuality(frame.operatingMode().quality()));
-		putU32(result, 6007, frame == null ? null : Integer.toUnsignedLong(frame.alarmMask()));
-		result.put(6009, frame == null || frame.currentDirectionMapping() == null ? UNAVAILABLE_WORD
-				: frame.currentDirectionMapping() == BmsCurrentDirectionMapping.POSITIVE ? 0 : 1);
-		result.put(6010, 0); // reserved; reads as zero for contract v1
-
-		putUuid(result, 6011, frame == null ? null : frame.snapshotGeneration());
-		putU64(result, 6019, frame == null ? null : frame.snapshotSequence());
-		putU64(result, 6023, frame == null || frame.capturedAt() == null ? null : frame.capturedAt().toEpochMilli());
-		putU64(result, 6027, frame == null ? null : frame.currentMeasuredAt());
-		var reference = frame == null ? null : frame.reference();
-		putU64(result, 6031, reference == null ? null : reference.calibrationEventId());
-		putU64(result, 6035, reference == null ? null : reference.curveVersionId());
-		putU64(result, 6039, reference == null ? null : reference.calibrationProcessId());
-		putS32(result, 6043, reference == null ? null : reference.processAttemptNumber(), 1);
-		putU64(result, 6045, reference == null ? null : reference.recoveryFloatSampleId());
-		putU64(result, 6049, reference == null ? null : reference.vocSampleId());
-		putU32(result, 6053, reference == null ? null : crc32(reference.contentHash()));
-
-		for (var alarm : Alarm.values()) {
-			result.put(FIRST_ALARM_ADDRESS + alarm.bit(), frame == null
-					|| frame.alarmEvaluations().get(alarm) == AlarmEvaluation.UNAVAILABLE ? UNAVAILABLE_WORD
-					: (frame.alarmMask() & alarm.mask()) != 0 ? 1 : 0);
-		}
-
 		var values = frame == null ? null : frame.string();
-		putMeasurement(result, 0, values, BmsMonitoringSnapshot.StringMeasurements::batteryVoltageV, 100);
-		putMeasurement(result, 1, values, BmsMonitoringSnapshot.StringMeasurements::midpointVoltageV, 100);
-		putMeasurement(result, 2, values, BmsMonitoringSnapshot.StringMeasurements::batteryCurrentA, 100);
-		putMeasurement(result, 3, values, BmsMonitoringSnapshot.StringMeasurements::batteryPowerW, 1);
-		putMeasurement(result, 4, values, BmsMonitoringSnapshot.StringMeasurements::floatCurrentA, 100);
-		putMeasurement(result, 5, values, BmsMonitoringSnapshot.StringMeasurements::minCellVoltageV, 1000);
-		putMeasurement(result, 6, values, BmsMonitoringSnapshot.StringMeasurements::maxCellVoltageV, 1000);
-		putMeasurement(result, 7, values, BmsMonitoringSnapshot.StringMeasurements::averageCellVoltageV, 1000);
-		putMeasurement(result, 8, values, BmsMonitoringSnapshot.StringMeasurements::maxCellResistanceUohm, 1);
-		putMeasurement(result, 9, values, BmsMonitoringSnapshot.StringMeasurements::averageCellResistanceUohm, 1);
-		putMeasurement(result, 10, values, BmsMonitoringSnapshot.StringMeasurements::ambientTemperatureC, 10);
-		putMeasurement(result, 11, values, BmsMonitoringSnapshot.StringMeasurements::maxCellTemperatureC, 10);
-		putMeasurement(result, 12, values, BmsMonitoringSnapshot.StringMeasurements::averageCellTemperatureC, 10);
-		putMeasurement(result, 13, values, BmsMonitoringSnapshot.StringMeasurements::batterySocPct, 100);
-		putMeasurement(result, 14, values, BmsMonitoringSnapshot.StringMeasurements::remainingDischargeHours, 100);
-		putMeasurement(result, 15, values, BmsMonitoringSnapshot.StringMeasurements::batterySohPct, 100);
-		putMeasurement(result, 16, values, BmsMonitoringSnapshot.StringMeasurements::minimumCellSohPct, 100);
+		for (var register : MeasurementRegister.values()) {
+			putS32(result, register.address(), values == null ? null : register.value(values), register.scale());
+		}
+		var activeMask = 0;
+		var validityMask = 0;
+		if (frame != null) {
+			for (var alarmBit : ALARM_BITS) {
+				var alarm = alarmBit.alarm();
+				if (frame.alarmEvaluations().get(alarm) != AlarmEvaluation.AVAILABLE) {
+					continue;
+				}
+				validityMask |= alarmBit.mask();
+				if ((frame.alarmMask() & alarm.mask()) != 0) {
+					activeMask |= alarmBit.mask();
+				}
+			}
+		}
+		result.put(ALARM_ACTIVE_MASK_ADDRESS, activeMask);
+		result.put(ALARM_VALIDITY_MASK_ADDRESS, validityMask);
 		return Map.copyOf(result);
-	}
-
-	private static int frameQuality(BmsMonitoringSnapshot frame) {
-		if (frame == null) return UNAVAILABLE_WORD;
-		if (frame.stale()) return 1;
-		return frame.qualityWarning() == null ? 0 : 2;
-	}
-
-	private static int currentQuality(CurrentQuality quality) {
-		if (quality == null) return UNAVAILABLE_WORD;
-		return switch (quality) {
-		case FRESH -> 0;
-		case RETAINED -> 1;
-		case MISSING -> 2;
-		case COMMUNICATION_FAILED -> 3;
-		case TIMESTAMP_MISSING -> 4;
-		};
-	}
-
-	private static int operatingMode(OperatingMode mode) {
-		if (mode == null) return UNAVAILABLE_WORD;
-		return switch (mode) {
-		case UNKNOWN -> 0;
-		case IDLE -> 1;
-		case CHARGING -> 2;
-		case FLOAT -> 3;
-		case DISCHARGING -> 4;
-		};
-	}
-
-	private static int modeQuality(ModeQuality quality) {
-		if (quality == null) return UNAVAILABLE_WORD;
-		return switch (quality) {
-		case VALID -> 0;
-		case CANDIDATE -> 1;
-		case STALE -> 2;
-		case UNAVAILABLE -> 3;
-		};
-	}
-
-	private static <T extends Number> void putMeasurement(Map<Integer, Integer> target, int index,
-			BmsMonitoringSnapshot.StringMeasurements values,
-			Function<BmsMonitoringSnapshot.StringMeasurements, T> getter, double scale) {
-		putS32(target, FIRST_MEASUREMENT_ADDRESS + index * 2, values == null ? null : getter.apply(values), scale);
 	}
 
 	private static void putS32(Map<Integer, Integer> target, int address, Number value, double scale) {
@@ -163,37 +215,4 @@ public final class BmsMonitoringModbusMap {
 		target.put(address + 1, value.intValue() & 0xffff);
 	}
 
-	private static void putU64(Map<Integer, Integer> target, int address, Long value) {
-		if (value == null || value < 0) {
-			for (var i = 0; i < 4; i++) target.put(address + i, UNAVAILABLE_WORD);
-			return;
-		}
-		for (var i = 0; i < 4; i++) {
-			var shift = (3 - i) * 16;
-			target.put(address + i, (int) (value >>> shift) & 0xffff);
-		}
-	}
-
-	private static void putUuid(Map<Integer, Integer> target, int address, UUID value) {
-		if (value == null) {
-			for (var i = 0; i < 8; i++) target.put(address + i, UNAVAILABLE_WORD);
-			return;
-		}
-		putLongWords(target, address, value.getMostSignificantBits());
-		putLongWords(target, address + 4, value.getLeastSignificantBits());
-	}
-
-	private static void putLongWords(Map<Integer, Integer> target, int address, long value) {
-		for (var i = 0; i < 4; i++) {
-			var shift = (3 - i) * 16;
-			target.put(address + i, (int) (value >>> shift) & 0xffff);
-		}
-	}
-
-	private static Long crc32(String value) {
-		if (value == null || value.isBlank()) return null;
-		var crc = new CRC32();
-		crc.update(value.getBytes(StandardCharsets.UTF_8));
-		return crc.getValue();
-	}
 }

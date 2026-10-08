@@ -82,6 +82,13 @@ public record BmsCalculationSnapshot(UUID generation, long sequence, long captur
 		VALID, ESTIMATED, PROVISIONAL, AUTHORITATIVE, RETAINED, UNAVAILABLE
 	}
 
+	/** Provenance of the physical TA measurements represented by one cell. */
+	public enum CellQuality {
+		FRESH,
+		RETAINED,
+		UNAVAILABLE
+	}
+
 	public record EstimatorReferenceIdentity(Long calibrationEventId, Long curveVersionId,
 			Long calibrationProcessId, Integer processAttemptNumber, String contentHash) {
 	}
@@ -92,10 +99,22 @@ public record BmsCalculationSnapshot(UUID generation, long sequence, long captur
 
 	public record Cell(int cellId, Double voltage, Double temperature, Integer internalResistance,
 			Double soc, Double soh, Double ir, String availabilityWarning, EstimatorProvenance socEstimator,
-			EstimatorProvenance sohEstimator) {
+			EstimatorProvenance sohEstimator, Long measuredAt, CellQuality quality) {
+		public Cell {
+			quality = quality == null ? CellQuality.UNAVAILABLE : quality;
+		}
+
+		public Cell(int cellId, Double voltage, Double temperature, Integer internalResistance,
+				Double soc, Double soh, Double ir, String availabilityWarning, EstimatorProvenance socEstimator,
+				EstimatorProvenance sohEstimator) {
+			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning,
+					socEstimator, sohEstimator, null, CellQuality.FRESH);
+		}
+
 		public Cell(int cellId, Double voltage, Double temperature, Integer internalResistance,
 				Double soc, Double soh, Double ir, String availabilityWarning) {
-			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning, null, null);
+			this(cellId, voltage, temperature, internalResistance, soc, soh, ir, availabilityWarning, null, null,
+					null, CellQuality.FRESH);
 		}
 	}
 }

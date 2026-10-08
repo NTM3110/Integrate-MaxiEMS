@@ -127,19 +127,38 @@ public record BmsMonitoringSnapshot(String stringKey, UUID snapshotGeneration, l
 	public record CellMeasurements(int cellIndex, Double voltageV, Double resistanceUohm,
 			Double temperatureC, Double socPct, Double sohPct, String availabilityWarning,
 			Double resistanceAlarmThresholdUohm, EstimatorProvenance socEstimator,
-			EstimatorProvenance sohEstimator) {
+			EstimatorProvenance sohEstimator, Long measuredAtEpochMs, Long ageMs, CellMeasurementQuality quality) {
+		public CellMeasurements {
+			quality = quality == null ? CellMeasurementQuality.UNAVAILABLE : quality;
+		}
+
+		public CellMeasurements(int cellIndex, Double voltageV, Double resistanceUohm,
+				Double temperatureC, Double socPct, Double sohPct, String availabilityWarning,
+				Double resistanceAlarmThresholdUohm, EstimatorProvenance socEstimator,
+				EstimatorProvenance sohEstimator) {
+			this(cellIndex, voltageV, resistanceUohm, temperatureC, socPct, sohPct, availabilityWarning,
+					resistanceAlarmThresholdUohm, socEstimator, sohEstimator, null, null,
+					CellMeasurementQuality.FRESH);
+		}
 		public CellMeasurements(int cellIndex, Double voltageV, Double resistanceUohm,
 				Double temperatureC, Double socPct, Double sohPct, String availabilityWarning,
 				Double resistanceAlarmThresholdUohm) {
 			this(cellIndex, voltageV, resistanceUohm, temperatureC, socPct, sohPct, availabilityWarning,
-					resistanceAlarmThresholdUohm, null, null);
+					resistanceAlarmThresholdUohm, null, null, null, null, CellMeasurementQuality.FRESH);
 		}
 
 		public CellMeasurements(int cellIndex, Double voltageV, Double resistanceUohm,
 				Double temperatureC, Double socPct, Double sohPct, String availabilityWarning) {
 			this(cellIndex, voltageV, resistanceUohm, temperatureC, socPct, sohPct, availabilityWarning, null,
-					null, null);
+					null, null, null, null, CellMeasurementQuality.FRESH);
 		}
+	}
+
+	public enum CellMeasurementQuality {
+		FRESH,
+		RETAINED,
+		STALE,
+		UNAVAILABLE
 	}
 
 	public record AppliedThresholds(double lowCellDeviationFraction, double highCellDeviationFraction,

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Applies one BMS WAN interface through NetworkManager.
+# Usage: netcfg.sh <interface> dhcp
+#        netcfg.sh <interface> static <address> <mask-or-prefix> <gateway-or-empty> [dns1] [dns2]
+set -euo pipefail
+
+iface="${1:?interface is required}"
+mode="${2:?mode is required}"
+
+sys_class_net=/sys/class/net
+if [[ "${MAXIEMS_NETCFG_TESTING:-}" == 1 ]]; then
+  sys_class_net="${MAXIEMS_NETCFG_SYS_CLASS_NET:?test sysfs path is required}"
+elif [[ -n "${MAXIEMS_NETCFG_SYS_CLASS_NET:-}" ]]; then
+  echo "Test-only environment is not permitted in production mode." >&2
+  exit 1
+fi
+[[ $EUID -eq 0 || "${MAXIEMS_NETCFG_TESTING:-}" == 1 ]] || { echo "Network configuration requires the Edge process to run as root." >&2; exit 1; }
+[[ "$iface" =~ ^[A-Za-z0-9_.:-]+$ ]] || { echo "Invalid interface name." >&2; exit 2; }
+# Keep the root helper constrained even if it is invoked outside the JSON API.
+# enp0s31f6 remains accepted for upgrades that preserve the old development map.
+case "$iface" in eth0|eth1|enp0s31f6) ;; *) echo "Interface is not allow-listed: $iface" >&2; exit 2 ;; esac
+[[ -d "$sys_class_net/$iface" ]] || { echo "Interface not found: $iface" >&2; exit 2; }
+command -v nmcli >/dev/null || { echo "NetworkManager (nmcli) is required." >&2; exit 3; }
+
+# Validate the complete request before creating or modifying any profile.
+case "$mode" in
+  dhcp)
+    [[ $# -eq 2 ]] || { echo "DHCP accepts no additional arguments." >&2; exit 2; }
+    ;;
+  static)
+    [[ $# -ge 5 && $# -le 7 ]] || { echo "Static requires address, mask/prefix, an optional gateway argument, and up to two DNS servers." >&2; exit 2; }
+    address="$3"
+    mask="$4"
+    gateway="$5"
+    if [[ "$mask" == *.* ]]; then
+      IFS=. read -r a b c d extra <<< "$mask"
+      declare -A prefix=([255]=8 [254]=7 [252]=6 [248]=5 [240]=4 [224]=3 [192]=2 [128]=1 [0]=0)
+      declare -A bit_pattern=([255]=11111111 [254]=11111110 [252]=11111100 [248]=11111000 [240]=11110000 [224]=11100000 [192]=11000000 [128]=10000000 [0]=00000000)
+      [[ -z "${extra:-}" && -n "${prefix[$a]:-}" && -n "${prefix[$b]:-}" && -n "${prefix[$c]:-}" && -n "${prefix[$d]:-}" ]] || { echo "Invalid subnet mask." >&2; exit 2; }
+      mask_bits="${bit_pattern[$a]}${bit_pattern[$b]}${bit_pattern[$c]}${bit_pattern[$d]}"
+      [[ "$mask_bits" =~ ^1*0*$ ]] || { echo "Subnet mask must be contiguous." >&2; exit 2; }
+      mask=$((prefix[$a] + prefix[$b] + prefix[$c] + prefix[$d]))
+    fi
+    [[ "$mask" =~ ^([0-9]|[12][0-9]|3[0-2])$ ]] || { echo "Invalid subnet prefix." >&2; exit 2; }
+    dns="${6:-$gateway}"
+    [[ -n "${7:-}" ]] && dns+=",$7"
+    ;;
+  *)
+    echo "Mode must be dhcp or static." >&2
+    exit 2
+    ;;
+esac
+
+managed_name="bms-$iface"
+profile_list=$(nmcli -t --escape no -f NAME,UUID connection show)
+
+managed_uuids() {
+  local line name uuid
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    name=${line%%:*}
+    uuid=${line##*:}
+    [[ "$name" == "$managed_name" ]] && printf '%s\n' "$uuid"
+  done <<<"$profile_list"
+}
+
+mapfile -t matches < <(managed_uuids)
+if (( ${#matches[@]} > 1 )); then
+  echo "Managed connection name is ambiguous: $managed_name" >&2
+  exit 4
+fi
+if (( ${#matches[@]} == 0 )); then
+  nmcli connection add type ethernet ifname "$iface" con-name "$managed_name" >/dev/null
+  profile_list=$(nmcli -t --escape no -f NAME,UUID connection show)
+  mapfile -t matches < <(managed_uuids)
+  (( ${#matches[@]} == 1 )) || { echo "Unable to resolve newly created managed connection: $managed_name" >&2; exit 4; }
+fi
+
+connection_uuid=${matches[0]}
+mapfile -t profile < <(nmcli -g connection.type,connection.interface-name connection show uuid "$connection_uuid")
+(( ${#profile[@]} >= 2 )) || { echo "Unable to inspect managed connection: $managed_name" >&2; exit 4; }
+[[ "${profile[0]}" == 802-3-ethernet || "${profile[0]}" == ethernet ]] || {
+  echo "Managed connection $managed_name is not an Ethernet profile." >&2
+  exit 4
+}
+[[ "${profile[1]}" == "$iface" ]] || {
+  echo "Managed connection $managed_name is bound to ${profile[1]:-(no interface)}, not $iface." >&2
+  exit 4
+}
+
+case "$mode" in
+  dhcp)
+    nmcli connection modify uuid "$connection_uuid" ipv4.method auto ipv4.addresses "" ipv4.gateway "" ipv4.dns "" ipv4.routes ""
+    ;;
+  static)
+    nmcli connection modify uuid "$connection_uuid" ipv4.method manual ipv4.addresses "$address/$mask" ipv4.gateway "$gateway" ipv4.dns "$dns"
+    ;;
+esac
+
+nmcli connection up uuid "$connection_uuid" >/dev/null
+echo "Applied $mode configuration to $iface using NetworkManager connection $managed_name ($connection_uuid)."

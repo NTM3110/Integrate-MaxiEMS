@@ -19,6 +19,7 @@ import org.osgi.service.component.annotations.Reference;
 public class BmsSerialBridgeServiceImpl implements BmsSerialBridgeService {
 
 	static final String FACTORY_PID = "Bridge.Modbus.Serial";
+	static final String RESERVED_BY = "maxiems.modbusServerReservedBy";
 
 	@Reference
 	private ConfigurationAdmin configurationAdmin;
@@ -40,6 +41,9 @@ public class BmsSerialBridgeServiceImpl implements BmsSerialBridgeService {
 	public SerialBridge update(String id, String alias, int baudRate, int databits, String parity, String stopbits)
 			throws Exception {
 		var configuration = this.find(id);
+		if (!string(configuration.getProperties(), RESERVED_BY).isBlank()) {
+			throw new IllegalStateException("Serial port is reserved by the BMS Modbus Server");
+		}
 		var properties = copy(configuration.getProperties());
 		properties.put("alias", alias == null ? "" : alias);
 		properties.put("baudRate", baudRate);
