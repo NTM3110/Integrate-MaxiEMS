@@ -1,0 +1,316 @@
+#!/usr/bin/env bash
+set -euo pipefail
+readonly COMMON='/usr/local/libexec/maxiems-helper-common'
+# shellcheck source=/dev/null
+source "$COMMON"
+require_root
+require_arg_count 0 "$#"
+
+readonly source='/opt/maxiems/current/remote'
+readonly unit='/etc/systemd/system/maxiems-kiosk.service'
+readonly enabled_link='/etc/systemd/system/multi-user.target.wants/maxiems-kiosk.service'
+readonly legacy_user_unit='/etc/systemd/user/maxiems-kiosk.service'
+readonly legacy_user_link='/home/admin/.config/systemd/user/default.target.wants/maxiems-kiosk.service'
+readonly sway_source="$source/etc/sway/maxiems-kiosk.conf"
+readonly sway_config='/home/admin/.config/sway/config'
+readonly sway_include='/home/admin/.config/sway/config.d/maxiems-kiosk.conf'
+readonly legacy='/home/admin/.config/autostart/open-firefox.desktop'
+readonly old_gnome='/etc/xdg/autostart/maxiems-kiosk.desktop'
+readonly getty_dropin_source="$source/etc/systemd/system/getty@tty1.service.d/90-maxiems-kiosk-autologin.conf"
+readonly getty_dropin='/etc/systemd/system/getty@tty1.service.d/90-maxiems-kiosk-autologin.conf'
+readonly profile_launcher_source="$source/etc/profile.d/90-maxiems-kiosk-sway.sh"
+readonly profile_launcher='/etc/profile.d/90-maxiems-kiosk-sway.sh'
+readonly include_line='include ~/.config/sway/config.d/maxiems-kiosk.conf'
+readonly keyboard_directory='/var/lib/maxiems/kbd'
+
+require_safe_directory_or_absent() {
+    local path="$1"
+    [[ ! -L "$path" && ( ! -e "$path" || -d "$path" ) ]] || \
+        { echo "Unsafe kiosk directory: $path" >&2; exit 65; }
+}
+
+require_root_directory() {
+    local path="$1"
+    [[ -d "$path" && ! -L "$path" && "$(/usr/bin/stat -c '%U:%G' "$path")" == root:root ]] || \
+        { echo "Unsafe kiosk system directory: $path" >&2; exit 65; }
+}
+
+is_known_getty_dropin() {
+    [[ -f "$getty_dropin" && ! -L "$getty_dropin" ]] && \
+        [[ "$(/usr/bin/stat -c '%U:%G' "$getty_dropin")" == root:root ]] && \
+        /usr/bin/grep -Fqx '# Managed by MAXiEMS BMS kiosk.' "$getty_dropin" && \
+		/usr/bin/grep -Fqx 'ExecStart=' "$getty_dropin" && \
+        /usr/bin/grep -Fqx 'ExecStart=-/sbin/agetty --autologin admin --noclear %I $TERM' "$getty_dropin"
+}
+
+is_known_profile_launcher() {
+    [[ -f "$profile_launcher" && ! -L "$profile_launcher" ]] && \
+        [[ "$(/usr/bin/stat -c '%U:%G' "$profile_launcher")" == root:root ]] && \
+        /usr/bin/grep -Fqx '# Managed by MAXiEMS BMS kiosk.' "$profile_launcher" && \
+        /usr/bin/grep -Fq 'SSH_CONNECTION' "$profile_launcher" && \
+        /usr/bin/grep -Fq '/dev/tty1' "$profile_launcher" && \
+        /usr/bin/grep -Fqx '    exec /usr/bin/sway' "$profile_launcher"
+}
+
+mark_kiosk_transaction() {
+    [[ -e "$MAXIEMS_DEPLOY_LOCK/id" || -L "$MAXIEMS_DEPLOY_LOCK/id" ]] || return 0
+    require_regular_no_symlink "$MAXIEMS_DEPLOY_LOCK/id"
+    local release_id
+    release_id="$(<"$MAXIEMS_DEPLOY_LOCK/id")"
+    validate_release_id "$release_id"
+    local transaction="$MAXIEMS_DEPLOY_STATE/$release_id"
+    [[ -d "$transaction" && ! -L "$transaction" ]] || die 'deployment transaction is unsafe'
+    require_root_owned "$transaction"
+    require_regular_no_symlink "$transaction/status"
+    case "$(<"$transaction/status")" in
+        begun|staged|activated) ;;
+        *) die 'deployment transaction is not active' ;;
+    esac
+    /usr/bin/touch -- "$transaction/kiosk-managed"
+}
+
+user_systemctl() {
+    local user_id
+    user_id="$(/usr/bin/id -u admin)"
+    [[ -S "/run/user/$user_id/bus" ]] || return 1
+    /usr/sbin/runuser -u admin -- /usr/bin/env \
+        "XDG_RUNTIME_DIR=/run/user/$user_id" \
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$user_id/bus" \
+        /usr/bin/systemctl --user "$@"
+}
+
+is_known_legacy_user_unit() {
+    [[ -f "$legacy_user_unit" && ! -L "$legacy_user_unit" ]] && \
+        [[ "$(/usr/bin/stat -c '%U:%G' "$legacy_user_unit")" == 'root:root' ]] && \
+        /usr/bin/grep -Fqx \
+            'ExecStart=/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor' \
+            "$legacy_user_unit"
+}
+
+is_known_system_unit() {
+	[[ -f "$unit" && ! -L "$unit" ]] && \
+		[[ "$(/usr/bin/stat -c '%U:%G' "$unit")" == 'root:root' ]] && \
+		/usr/bin/grep -Fqx 'Description=MAXiEMS BMS Chromium kiosk' "$unit" && \
+		/usr/bin/grep -Fqx 'User=admin' "$unit" && \
+		/usr/bin/grep -Fqx 'Group=admin' "$unit" && \
+		/usr/bin/grep -Fqx \
+			'ExecStart=/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor' \
+			"$unit" && \
+		/usr/bin/grep -Fqx 'WantedBy=multi-user.target' "$unit" && \
+		! /usr/bin/grep -Fqx 'User=root' "$unit"
+}
+
+stop_legacy_user_service() {
+    user_systemctl stop maxiems-kiosk.service >/dev/null 2>&1 || true
+    local -a pids=()
+    mapfile -t pids < <(/usr/bin/pgrep --uid admin --full \
+        '^/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor$' || true)
+    local pid
+    for pid in "${pids[@]}"; do
+        [[ "$pid" =~ ^[0-9]+$ ]] || die 'invalid legacy kiosk process id'
+        /usr/bin/kill -TERM "$pid"
+    done
+    for _ in {1..50}; do
+        /usr/bin/pgrep --uid admin --full \
+            '^/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor$' \
+            >/dev/null 2>&1 || return 0
+        /usr/bin/sleep 0.1
+    done
+    echo 'Legacy kiosk user service did not stop' >&2
+    exit 66
+}
+
+[[ -f "$source/etc/systemd/system/maxiems-kiosk.service" && -f "$sway_source" && \
+    -f "$source/usr/local/libexec/maxiems-kiosk-supervisor" && -f "$getty_dropin_source" && \
+    -f "$profile_launcher_source" && ! -L "$getty_dropin_source" && \
+    ! -L "$profile_launcher_source" ]] || \
+    { echo 'BMS release is missing Sway Chromium kiosk assets' >&2; exit 66; }
+[[ -x /opt/maxiems/current/helpers/maxiems-keyboard-controller && \
+    -x /opt/maxiems/current/helpers/wvkbd-mobintl ]] || \
+    { echo 'BMS release is missing executable on-screen keyboard assets' >&2; exit 66; }
+require_root_owned "$getty_dropin_source"
+require_root_owned "$profile_launcher_source"
+/usr/bin/systemd-analyze verify "$source/etc/systemd/system/maxiems-kiosk.service"
+[[ -x /usr/bin/sway ]] || \
+    { echo 'Sway is missing on target; install it before enabling the BMS kiosk' >&2; exit 66; }
+if [[ ! -x /usr/bin/chromium && ! -x /usr/bin/chromium-browser && ! -x /snap/bin/chromium ]]; then
+    echo 'Chromium is missing on target; install it before enabling the BMS kiosk' >&2
+    exit 66
+fi
+
+readonly user_group="$(/usr/bin/id -gn admin)"
+[[ -d /home/admin && ! -L /home/admin && "$(/usr/bin/stat -c '%U' /home/admin)" == admin ]] || \
+    { echo 'Admin home is missing, symbolic, or has an unexpected owner' >&2; exit 65; }
+admin_passwd="$(/usr/bin/getent passwd admin)"
+IFS=: read -r admin_name _ _ _ _ admin_home admin_shell <<< "$admin_passwd"
+[[ "$admin_name" == admin && "$admin_home" == /home/admin && "$admin_shell" == /* && \
+    -x "$admin_shell" && "$admin_shell" != /usr/sbin/nologin && "$admin_shell" != /bin/false ]] || \
+    { echo 'Admin account cannot start a tty1 login shell for the BMS kiosk' >&2; exit 65; }
+for directory in \
+    /home/admin/.config \
+    /home/admin/.config/systemd \
+    /home/admin/.config/systemd/user \
+    /home/admin/.config/systemd/user/default.target.wants \
+    /home/admin/.config/sway \
+    /home/admin/.config/sway/config.d \
+    /home/admin/.config/autostart \
+    /etc/systemd \
+    /etc/systemd/system \
+    /etc/systemd/system/getty@tty1.service.d \
+    /etc/systemd/system/multi-user.target.wants \
+    /etc/systemd/user \
+    /etc/xdg \
+    /etc/xdg/autostart; do
+    require_safe_directory_or_absent "$directory"
+done
+require_root_directory /etc/systemd/system
+require_root_directory /etc/profile.d
+if [[ -e /etc/systemd/system/getty@tty1.service.d ]]; then
+    require_root_directory /etc/systemd/system/getty@tty1.service.d
+fi
+if [[ -e "$keyboard_directory" ]]; then
+    [[ -d "$keyboard_directory" && ! -L "$keyboard_directory" && \
+        "$(/usr/bin/stat -c '%U:%G' "$keyboard_directory")" == root:openems && \
+        "$(/usr/bin/stat -c '%a' "$keyboard_directory")" == 770 ]] || \
+        { echo "Unsafe on-screen keyboard state directory: $keyboard_directory" >&2; exit 65; }
+fi
+for path in "$unit" "$legacy_user_unit" "$sway_config" "$sway_include" "$old_gnome" \
+    "$getty_dropin" "$profile_launcher"; do
+	[[ ! -L "$path" ]] || { echo "Existing kiosk asset is a symbolic link: $path" >&2; exit 65; }
+done
+if [[ -e "$getty_dropin" ]] && ! is_known_getty_dropin; then
+    echo "Unknown tty1 getty override: $getty_dropin" >&2
+    exit 65
+fi
+if [[ -e "$profile_launcher" ]] && ! is_known_profile_launcher; then
+    echo "Unknown tty1 Sway launcher: $profile_launcher" >&2
+    exit 65
+fi
+if [[ -e "$unit" ]] && ! is_known_system_unit; then
+	echo "Unknown kiosk system unit: $unit" >&2
+	exit 65
+fi
+if [[ -e "$enabled_link" || -L "$enabled_link" ]]; then
+    [[ -L "$enabled_link" && "$(/usr/bin/readlink -- "$enabled_link")" == "$unit" ]] || \
+        { echo "Unknown kiosk system enable asset: $enabled_link" >&2; exit 65; }
+fi
+if [[ -e "$legacy_user_unit" ]] && ! is_known_legacy_user_unit; then
+    echo "Unknown legacy kiosk user unit: $legacy_user_unit" >&2
+    exit 65
+fi
+if [[ -e "$legacy_user_link" || -L "$legacy_user_link" ]]; then
+    [[ -L "$legacy_user_link" && "$(/usr/bin/readlink -- "$legacy_user_link")" == "$legacy_user_unit" ]] || \
+        { echo "Unknown legacy kiosk enable asset: $legacy_user_link" >&2; exit 65; }
+fi
+if user_systemctl is-active --quiet open-firefox.service || \
+    user_systemctl is-enabled --quiet open-firefox.service || \
+    [[ -L /home/admin/.config/systemd/user/default.target.wants/open-firefox.service ]]; then
+    echo 'Legacy Firefox user service is active or enabled; disable it before enabling Chromium' >&2
+    exit 65
+fi
+if [[ -e "$old_gnome" ]]; then
+    [[ -f "$old_gnome" ]] && \
+        /usr/bin/grep -Fqx 'Exec=/usr/local/libexec/maxiems-kiosk-session-start' "$old_gnome" || \
+        { echo 'Unknown GNOME kiosk autostart conflicts with Sway kiosk' >&2; exit 65; }
+fi
+if [[ -e "$legacy" ]]; then
+    [[ -f "$legacy" && ! -L "$legacy" ]] && \
+        /usr/bin/grep -Fqx 'Exec=/usr/bin/firefox --kiosk http://localhost:80' "$legacy" || \
+        { echo 'Unknown Firefox autostart conflicts with BMS Chromium kiosk' >&2; exit 65; }
+fi
+if [[ -e "$sway_include" ]] && ! /usr/bin/cmp -s -- "$sway_source" "$sway_include"; then
+    known_direct_launcher=false
+    known_user_service_launcher=false
+    if /usr/bin/grep -Fqx \
+        'exec /opt/maxiems/current/helpers/maxiems-keyboard-controller' "$sway_include" && \
+        /usr/bin/grep -Fq 'exec /usr/bin/env chromium --kiosk' "$sway_include" && \
+        /usr/bin/grep -Fq 'http://localhost:80' "$sway_include"; then
+        known_direct_launcher=true
+    fi
+    if /usr/bin/grep -Fq 'maxiems-keyboard-controller' "$sway_include" && \
+        /usr/bin/grep -Fqx 'exec /usr/local/libexec/maxiems-kiosk-session-start' "$sway_include"; then
+        known_user_service_launcher=true
+    fi
+    [[ -f "$sway_include" && ! -L "$sway_include" && \
+        ( "$known_direct_launcher" == true || "$known_user_service_launcher" == true ) ]] || \
+        { echo 'Unknown Sway kiosk include; refusing to replace its launcher' >&2; exit 65; }
+fi
+if [[ -e "$sway_config" ]] && \
+    /usr/bin/grep -Eq '^[[:space:]]*exec([[:space:]]|_).*chromium' "$sway_config"; then
+    echo 'Chromium launcher in main Sway config conflicts with managed kiosk' >&2
+    exit 65
+fi
+
+mark_kiosk_transaction
+[[ ! -e "$old_gnome" ]] || /usr/bin/rm -- "$old_gnome"
+[[ ! -e "$legacy" ]] || /usr/bin/rm -- "$legacy"
+/usr/sbin/usermod --append --groups openems admin
+/usr/bin/install --directory --owner=root --group=openems --mode=0770 "$keyboard_directory"
+
+legacy_user_removed=false
+if [[ -e "$legacy_user_unit" || -L "$legacy_user_link" ]]; then
+    /usr/bin/systemctl stop maxiems-kiosk.service >/dev/null 2>&1 || true
+    stop_legacy_user_service
+    /usr/bin/rm -f -- "$legacy_user_link"
+    /usr/bin/rm -f -- "$legacy_user_unit"
+    user_systemctl daemon-reload >/dev/null 2>&1 || true
+    legacy_user_removed=true
+fi
+
+unit_changed=false
+if [[ ! -f "$unit" ]] || ! /usr/bin/cmp -s -- "$source/etc/systemd/system/maxiems-kiosk.service" "$unit"; then
+    /usr/bin/install --owner=root --group=root --mode=0644 \
+        "$source/etc/systemd/system/maxiems-kiosk.service" "$unit"
+    unit_changed=true
+fi
+getty_changed=false
+/usr/bin/install --directory --owner=root --group=root --mode=0755 \
+    /etc/systemd/system/getty@tty1.service.d
+if [[ ! -f "$getty_dropin" ]] || ! /usr/bin/cmp -s -- "$getty_dropin_source" "$getty_dropin"; then
+    /usr/bin/install --owner=root --group=root --mode=0644 "$getty_dropin_source" "$getty_dropin"
+    getty_changed=true
+fi
+if [[ ! -f "$profile_launcher" ]] || ! /usr/bin/cmp -s -- "$profile_launcher_source" "$profile_launcher"; then
+    /usr/bin/install --owner=root --group=root --mode=0644 "$profile_launcher_source" "$profile_launcher"
+    getty_changed=true
+fi
+/usr/bin/install --directory --owner=admin --group="$user_group" --mode=0700 \
+    /home/admin/.config /home/admin/.config/sway /home/admin/.config/sway/config.d
+if [[ ! -f "$sway_include" ]] || ! /usr/bin/cmp -s -- "$sway_source" "$sway_include"; then
+    /usr/bin/install --owner=admin --group="$user_group" --mode=0644 "$sway_source" "$sway_include"
+fi
+if [[ ! -f "$sway_config" ]]; then
+    /usr/bin/printf 'include /etc/sway/config\n%s\n' "$include_line" > "$sway_config"
+    /usr/bin/chown admin:"$user_group" "$sway_config"
+    /usr/bin/chmod 0644 "$sway_config"
+elif ! /usr/bin/grep -Fqx "$include_line" "$sway_config" && \
+    ! /usr/bin/grep -Eq '^[[:space:]]*include[[:space:]]+.*config\.d/\*' "$sway_config"; then
+    /usr/bin/printf '\n%s\n' "$include_line" >> "$sway_config"
+fi
+
+/usr/bin/systemctl daemon-reload
+/usr/bin/systemctl enable getty@tty1.service
+/usr/bin/systemctl is-enabled --quiet getty@tty1.service || \
+    { echo 'tty1 getty could not be enabled' >&2; exit 66; }
+/usr/bin/systemctl enable maxiems-kiosk.service
+/usr/bin/systemctl is-enabled --quiet maxiems-kiosk.service || \
+    { echo 'BMS Chromium kiosk system service could not be enabled' >&2; exit 66; }
+if /usr/bin/systemctl is-active --quiet maxiems-kiosk.service; then
+    if [[ "$unit_changed" == true || "$legacy_user_removed" == true ]]; then
+        /usr/bin/systemctl restart maxiems-kiosk.service
+    else
+        echo 'BMS Chromium kiosk system service already enabled and running; service was not restarted'
+    fi
+else
+    /usr/bin/systemctl start maxiems-kiosk.service
+fi
+if [[ "$getty_changed" == true ]]; then
+    if /usr/bin/who | /usr/bin/awk '$2 == "tty1" { found=1 } END { exit found ? 0 : 1 }'; then
+        echo 'tty1 is in use; MAXiEMS autologin and Sway will start after logout or reboot'
+    else
+        /usr/bin/systemctl restart getty@tty1.service
+        echo 'MAXiEMS tty1 autologin enabled; Sway session started as admin'
+    fi
+else
+    echo 'MAXiEMS tty1 autologin and Sway launcher already configured'
+fi

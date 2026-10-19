@@ -73,10 +73,11 @@ def main():
             ("Scheduler/AllAlphabetically/bms.config", "Scheduler.AllAlphabetically", "scheduler0", {}),
             ("Controller/Api/Websocket/bms.config", "Controller.Api.Websocket", "ctrlApiWebsocket0",
              {"bindAddress": quote("127.0.0.1"), "port": 'I"8085"'}),
-            ("Bridge/Modbus/Serial/bms.config", "Bridge.Modbus.Serial", "modbus0",
+            ("Bridge/BmsModbus/Serial/bms.config", "Bridge.BmsModbus.Serial", "modbus0",
              {"portName": quote(modbus_port),
               "baudRate": 'I"9600"', "databits": 'I"8"',
-              "stopbits": quote("ONE"), "parity": quote("NONE")})):
+              "stopbits": quote("ONE"), "parity": quote("NONE"),
+              "responseTimeoutMs": 'I"100"'})):
             write(output, path, {"id": quote(identifier), "enabled": 'B"true"', **fields,
                          "service.factoryPid": quote(pid), "service.pid": quote(pid + ".bms")})
         pid = "io.openems.edge.bms.platform.persistence.BmsDatabaseImpl"

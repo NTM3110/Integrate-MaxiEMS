@@ -57,6 +57,9 @@ public sealed class DeploymentEngine(
         ValidateManufacturingReview(request, releaseId, payloadHash);
 
         var state = new DeploymentSessionState();
+        run.AddCheck("kiosk-mode", true, request.KioskMode == DeploymentKioskMode.Preserve
+            ? "Preserve the target's existing kiosk configuration and service."
+            : "Manage the MAXiEMS Chromium kiosk configuration and service.");
 
         try
         {
@@ -195,10 +198,19 @@ public sealed class DeploymentEngine(
                 .CollectAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            var localTime = this.clock.GetUtcNow();
             var evaluation = UbuntuPreflightEvaluator.Evaluate(
                 collected,
-                this.clock.GetUtcNow(),
+                localTime,
                 ManifestRequiresModbus(manifest));
+
+            foreach (var warning in evaluation.Warnings)
+            {
+                run.Warning(DeploymentPhase.Preflight, "preflight." + warning.Code,
+                    $"{warning.Code}: target clock {warning.Subject} differs from deployer clock "
+                    + $"{localTime:O} by more than {UbuntuPreflightEvaluator.MaximumClockSkew.TotalMinutes:0} minutes. "
+                    + "Deployment continues; check NTP and timestamps on the target.");
+            }
 
             if (!evaluation.IsSupported)
             {
@@ -246,7 +258,8 @@ public sealed class DeploymentEngine(
 
             var assets = BootstrapPayloadAssets.Read(request.PayloadPath, publicKey);
             await bootstrap
-                .InstallAsync(assets, publicKey, cancellationToken)
+                .InstallAsync(assets, publicKey, localBootstrap: request.LocalBootstrap,
+                    cancellationToken)
                 .ConfigureAwait(false);
         });
     }
@@ -373,7 +386,8 @@ public sealed class DeploymentEngine(
             }
 
             await operations
-                .RunAsync("runtime-config", cancellationToken: cancellationToken)
+                .RunAsync("runtime-config", [request.KioskMode.ToString().ToLowerInvariant()],
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             var bootstrapStore = new SshOpenEmsBootstrapStore(

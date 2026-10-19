@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Launch one Chromium kiosk when the local BMS SPA and a safe Sway socket exist."""
+
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import time
+import urllib.error
+import urllib.request
+
+
+URL = "http://localhost:80"
+PROBE_URL = "http://127.0.0.1:80/"
+WAYLAND_NAME = re.compile(r"wayland-[0-9]+")
+CHROMIUM = next((path for path in ("/snap/bin/chromium", "/usr/bin/chromium", "/usr/bin/chromium-browser")
+                 if os.access(path, os.X_OK)), None)
+child = None
+child_wayland = None
+stopping = False
+
+
+def ready():
+    try:
+        with urllib.request.urlopen(PROBE_URL, timeout=2) as response:
+            body = response.read(262144).lower()
+            return response.status == 200 and b"<!doctype html" in body and b"data-sveltekit-preload-data" in body
+    except (OSError, urllib.error.URLError, TimeoutError):
+        return False
+
+
+def discover_wayland(runtime_base="/run/user"):
+    """Return the newest safe Wayland socket owned by this service user."""
+    uid = os.getuid()
+    runtime = Path(runtime_base) / str(uid)
+    try:
+        runtime_stat = os.lstat(runtime)
+    except OSError:
+        return None
+    if not stat.S_ISDIR(runtime_stat.st_mode) or runtime_stat.st_uid != uid:
+        return None
+    if stat.S_IMODE(runtime_stat.st_mode) & 0o077:
+        return None
+
+    candidates = []
+    try:
+        with os.scandir(runtime) as entries:
+            for entry in entries:
+                if WAYLAND_NAME.fullmatch(entry.name) is None:
+                    continue
+                try:
+                    entry_stat = entry.stat(follow_symlinks=False)
+                except OSError:
+                    continue
+                if stat.S_ISSOCK(entry_stat.st_mode) and entry_stat.st_uid == uid:
+                    candidates.append((entry_stat.st_mtime_ns, entry.name))
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    _, display = max(candidates)
+    return str(runtime), display
+
+
+def stop_child():
+    global child, child_wayland
+    if child is None:
+        return
+    if child.poll() is None:
+        child.terminate()
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+    child = None
+    child_wayland = None
+
+
+def on_signal(_signal, _frame):
+    global stopping
+    stopping = True
+
+
+def main():
+    global child, child_wayland
+    if CHROMIUM is None:
+        raise SystemExit("Chromium is not installed; kiosk cannot start")
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+    delay = 1
+    try:
+        while not stopping:
+            wayland = discover_wayland()
+            if wayland is None or not ready():
+                stop_child()
+                time.sleep(delay)
+                delay = min(delay * 2, 10)
+                continue
+            delay = 1
+            runtime, display = wayland
+            if child is not None and child_wayland != wayland:
+                stop_child()
+            if child is None:
+                environment = os.environ.copy()
+                environment["XDG_RUNTIME_DIR"] = runtime
+                environment["WAYLAND_DISPLAY"] = display
+                child = subprocess.Popen([
+                    CHROMIUM, "--kiosk", "--no-first-run", "--no-default-browser-check",
+                    "--disable-session-crashed-bubble", "--password-store=basic",
+                    "--ozone-platform=wayland", URL,
+                ], env=environment)
+                child_wayland = wayland
+            elif child.poll() is not None:
+                child.wait()
+                child = None
+                child_wayland = None
+                time.sleep(2)
+                continue
+            time.sleep(2)
+    finally:
+        stop_child()
+
+
+if __name__ == "__main__":
+    main()

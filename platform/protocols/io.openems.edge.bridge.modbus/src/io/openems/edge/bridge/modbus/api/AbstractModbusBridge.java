@@ -70,14 +70,14 @@ public abstract class AbstractModbusBridge extends AbstractOpenemsComponent
 		super.activate(context, config.id, config.alias, config.enabled);
 		this.applyConfig(config);
 		if (config.enabled) {
-			this.worker.activate(config.id);
+			this.activateWorker(config.id);
 		}
 	}
 
 	@Override
 	protected void deactivate() {
 		super.deactivate();
-		this.worker.deactivate();
+		this.deactivateWorker();
 		this.closeModbusConnection();
 	}
 
@@ -91,14 +91,31 @@ public abstract class AbstractModbusBridge extends AbstractOpenemsComponent
 		super.modified(context, config.id, config.alias, config.enabled);
 		this.applyConfig(config);
 		if (config.enabled) {
-			this.worker.modified(config.id);
+			this.modifyWorker(config.id);
 		} else {
-			this.worker.deactivate();
+			this.deactivateWorker();
 		}
 	}
 
 	private void applyConfig(Config config) {
 		this.config = config;
+	}
+
+	protected void activateWorker(String id) {
+		this.worker.activate(id);
+	}
+
+	protected void modifyWorker(String id) {
+		this.worker.modified(id);
+	}
+
+	protected void deactivateWorker() {
+		this.worker.deactivate();
+	}
+
+	/** Whether a failed request is repeated immediately after reconnecting. */
+	public boolean retryRequestImmediately() {
+		return true;
 	}
 
 	/**

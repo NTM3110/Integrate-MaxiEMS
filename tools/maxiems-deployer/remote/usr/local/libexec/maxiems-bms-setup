@@ -16,6 +16,8 @@ STATE = Path('/var/lib/maxiems/state/bms')
 DB_PID = 'io.openems.edge.bms.platform.persistence.BmsDatabaseImpl'
 AUTH_PID = 'io.openems.edge.bms.platform.auth.PlatformAuthenticationServiceImpl'
 PROFILE_MARKER = 'deployment-profile'
+LEGACY_BRIDGE_FACTORY = 'Bridge.Modbus.Serial'
+BMS_BRIDGE_FACTORY = 'Bridge.BmsModbus.Serial'
 
 
 def sql(statement, database='postgres'):
@@ -68,15 +70,71 @@ def seed_serial_bridges(profile):
     paths = {'real': ['/dev/ttyS1', '/dev/ttyS7', '/dev/ttyS9'],
              'demo': ['/dev/ttyBMS1', '/dev/ttyBMS3', '/dev/ttyBMS5']}[profile]
     for index, port in enumerate(paths):
-        write_config(f'Bridge.Modbus.Serial.maxiems-modbus{index}', {
+        write_config(f'{BMS_BRIDGE_FACTORY}.maxiems-modbus{index}', {
             'id': f'modbus{index}', 'alias': f'BMS String {index + 1}', 'enabled': True,
             'portName': port, 'baudRate': 9600, 'databits': 8, 'stopbits': 'ONE',
             'parity': 'NONE', 'logVerbosity': 'NONE', 'invalidateElementsAfterReadErrors': 1,
-        }, 'Bridge.Modbus.Serial')
+            'responseTimeoutMs': 100,
+        }, BMS_BRIDGE_FACTORY)
 
 
 def managed_serial_bridge_paths():
-    return [config_path(f'Bridge.Modbus.Serial.maxiems-modbus{index}') for index in range(3)]
+    return [config_path(f'{factory}.maxiems-modbus{index}')
+            for factory in (LEGACY_BRIDGE_FACTORY, BMS_BRIDGE_FACTORY) for index in range(3)]
+
+
+def migrate_serial_bridges():
+    """Keep managed bridge IDs and settings while changing only their factory."""
+    migrated = 0
+    for index in range(3):
+        old_pid = f'{LEGACY_BRIDGE_FACTORY}.maxiems-modbus{index}'
+        new_pid = f'{BMS_BRIDGE_FACTORY}.maxiems-modbus{index}'
+        old = config_path(old_pid)
+        new = config_path(new_pid)
+        if old.is_symlink() or new.is_symlink():
+            raise RuntimeError('Managed serial bridge path is unsafe')
+        if old.exists() and new.exists():
+            raise RuntimeError(f'Duplicate managed serial bridge modbus{index}')
+        if not old.exists():
+            continue
+        if not old.is_file():
+            raise RuntimeError(f'Managed serial bridge modbus{index} is not a regular file')
+        lines = old.read_text().splitlines()
+        required = {
+            'service.pid': f'service.pid="{old_pid}"',
+            'service.factoryPid': f'service.factoryPid="{LEGACY_BRIDGE_FACTORY}"',
+            'id': f'id="modbus{index}"',
+        }
+        for key, expected in required.items():
+            if [line for line in lines if line.startswith(key + '=')] != [expected]:
+                raise RuntimeError(f'Managed serial bridge modbus{index} has unexpected {key}')
+        translated = []
+        for line in lines:
+            if line == required['service.pid']:
+                line = f'service.pid="{new_pid}"'
+            elif line == required['service.factoryPid']:
+                line = f'service.factoryPid="{BMS_BRIDGE_FACTORY}"'
+            translated.append(line)
+        if not any(line.startswith('responseTimeoutMs=') for line in translated):
+            translated.append('responseTimeoutMs=I"100"')
+        new.parent.mkdir(parents=True, exist_ok=True)
+        account = pwd.getpwnam('openems')
+        parent = new.parent
+        while parent != CONFIG:
+            os.chown(parent, account.pw_uid, account.pw_gid)
+            os.chmod(parent, 0o750)
+            parent = parent.parent
+        temporary = new.with_suffix('.pending')
+        if temporary.exists():
+            raise RuntimeError('Interrupted managed serial bridge migration requires rollback')
+        with temporary.open('x') as stream:
+            stream.write('\n'.join(translated) + '\n')
+        os.chown(temporary, account.pw_uid, account.pw_gid)
+        os.chmod(temporary, 0o640)
+        temporary.replace(new)
+        old.unlink()
+        migrated += 1
+    return migrated
 
 
 def setup(profile):
@@ -126,10 +184,13 @@ def setup(profile):
                            'bootstrapAdminPassword': 'admin', 'importLegacyOpenmucAdministrator': False})
     if seed_topology:
         seed_serial_bridges(profile)
+    else:
+        migrated = migrate_serial_bridges()
     if not marker.exists():
         marker.write_text(profile + '\n')
         os.chmod(marker, 0o600)
-    disposition = 'bridge topology created' if seed_topology else 'existing bridge topology preserved'
+    disposition = ('bridge topology created' if seed_topology else
+                   f'{migrated} managed bridges migrated; existing bridge topology preserved')
     print(f'BMS database/configuration provisioned; {profile} profile; {disposition}')
 
 

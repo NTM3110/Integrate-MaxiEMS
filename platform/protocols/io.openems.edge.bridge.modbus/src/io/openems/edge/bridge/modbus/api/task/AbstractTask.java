@@ -123,6 +123,10 @@ public abstract non-sealed class AbstractTask<//
 					() -> sendRequest(bridge, unitId, this.responseClazz, request));
 
 		} catch (Exception e) {
+			if (!bridge.retryRequestImmediately()) {
+				bridge.closeModbusConnection();
+				throw e;
+			}
 			// Second try; with new connection
 			bridge.closeModbusConnection();
 			return this.logRequest(TryExecute.SECOND_TRY, bridge, logVerbosity, request,

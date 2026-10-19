@@ -1,5 +1,7 @@
 package io.openems.edge.bms.controllers.monitoring;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -33,6 +35,7 @@ import io.openems.edge.controller.api.Controller;
 		configurationPolicy = ConfigurationPolicy.REQUIRE)
 public class ControllerBmsMonitoringImpl extends AbstractOpenemsComponent
 		implements OpenemsComponent, Controller, BmsMonitoringSnapshotProvider {
+	private static final Logger LOG = LoggerFactory.getLogger(ControllerBmsMonitoringImpl.class);
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		BATTERY_VOLTAGE(Doc.of(OpenemsType.DOUBLE)),
@@ -133,6 +136,9 @@ public class ControllerBmsMonitoringImpl extends AbstractOpenemsComponent
 		if (frame == this.latestFrame) return;
 		this.publishChannels(frame);
 		this.latestFrame = frame;
+		LOG.info("BMS monitoring snapshot published: controller={} stringKey={} sourceSnapshot={}/{} publication={}/{} stale={} qualityWarning={}",
+				this.config.id(), frame.stringKey(), frame.snapshotGeneration(), frame.snapshotSequence(),
+				frame.publicationGeneration(), frame.publicationRevision(), frame.stale(), frame.qualityWarning());
 	}
 
 	@Override
@@ -143,6 +149,11 @@ public class ControllerBmsMonitoringImpl extends AbstractOpenemsComponent
 	@Override
 	public BmsMonitoringSnapshot latestFrame() {
 		return this.latestFrame;
+	}
+
+	@Override
+	public int snapshotFreshnessSeconds() {
+		return this.config.snapshotFreshnessSeconds();
 	}
 
 	private void apply(Config config) {

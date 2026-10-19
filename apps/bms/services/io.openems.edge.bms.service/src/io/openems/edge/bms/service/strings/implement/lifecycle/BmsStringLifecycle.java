@@ -429,8 +429,9 @@ public class BmsStringLifecycle {
 	}
 
 	private void rejectReservedBridge(String bridgeId) throws Exception {
-		var bridges = this.configurationAdmin.listConfigurations("(&(" + ConfigurationAdmin.SERVICE_FACTORYPID
-				+ "=Bridge.Modbus.Serial)(id=" + bridgeId.replace("\\", "\\5c").replace("*", "\\2a")
+		var bridges = this.configurationAdmin.listConfigurations("(&(|(" + ConfigurationAdmin.SERVICE_FACTORYPID
+				+ "=Bridge.Modbus.Serial)(" + ConfigurationAdmin.SERVICE_FACTORYPID
+				+ "=Bridge.BmsModbus.Serial))(id=" + bridgeId.replace("\\", "\\5c").replace("*", "\\2a")
 						.replace("(", "\\28").replace(")", "\\29") + "))");
 		if (bridges == null) return;
 		for (var bridge : bridges) {

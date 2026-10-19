@@ -1,0 +1,20 @@
+Bundle-Name: OpenEMS Edge BMS Modbus Batch Bridge
+Bundle-Vendor: AT Energy
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version: 1.0.0.${tstamp}
+
+-buildpath: \
+	${buildpath},\
+	io.openems.common,\
+	io.openems.edge.bridge.modbus,\
+	io.openems.edge.common,\
+	io.openems.j2mod,\
+
+-testpath: \
+	${testpath}
+
+Export-Package: \
+	io.openems.edge.bms.bridge.modbus.api
+
+Private-Package: \
+	io.openems.edge.bms.bridge.modbus

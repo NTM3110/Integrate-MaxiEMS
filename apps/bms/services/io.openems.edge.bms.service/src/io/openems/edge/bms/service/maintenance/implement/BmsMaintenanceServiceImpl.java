@@ -24,6 +24,11 @@ import com.ghgande.j2mod.modbus.util.SerialParameters;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bms.service.strings.implement.lifecycle.BmsStringLifecycle;
+import io.openems.edge.bms.service.persistence.implement.BmsDatabase;
+import io.openems.edge.bms.service.alarms.implement.persistence.MonitoringAlarmStore;
+import io.openems.edge.bms.service.monitoring.contracts.BmsMonitoringSnapshotProvider;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import io.openems.edge.bridge.modbus.api.BridgeModbusSerial;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.startstop.StartStop;
@@ -48,6 +53,18 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 
 	@Reference private BmsStringLifecycle strings;
 	@Reference private ComponentManager componentManager;
+	@Reference private BmsDatabase database;
+	private final CopyOnWriteArrayList<BmsMonitoringSnapshotProvider> monitoringProviders = new CopyOnWriteArrayList<>();
+
+	@Reference(service = BmsMonitoringSnapshotProvider.class, cardinality = ReferenceCardinality.MULTIPLE,
+			policy = ReferencePolicy.DYNAMIC)
+	protected void addMonitoringProvider(BmsMonitoringSnapshotProvider provider) {
+		this.monitoringProviders.addIfAbsent(provider);
+	}
+
+	protected void removeMonitoringProvider(BmsMonitoringSnapshotProvider provider) {
+		this.monitoringProviders.remove(provider);
+	}
 
 	@Deactivate
 	private void deactivate() {
@@ -72,6 +89,15 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 		if (action.equals("tc-calibrate") && (value < -32767 || value > 32767)) throw new OpenemsException("TC calibration must be between -32767 and 32767");
 		return this.start(action, stringIndex, value, null, null);
 	}
+	@Override public TaskStatus addressChange(int stringIndex, String moduleType, int oldId, int newId)
+			throws OpenemsException {
+		try {
+			ModuleAddressChange.validate(moduleType, oldId, newId);
+		} catch (IllegalArgumentException e) {
+			throw new OpenemsException(e.getMessage());
+		}
+		return this.start("address-change", stringIndex, null, null, null, moduleType, oldId, newId);
+	}
 	@Override public TaskStatus stop() throws OpenemsException { this.stopRequested = true; this.close(); synchronized (this.lock) { this.status.log("Stop requested"); return this.status.snapshot(); } }
 	@Override public String wifi(String action, String ssid, String bssid, String password) throws OpenemsException {
 		if (!List.of("status", "scan", "connect").contains(action)) throw new OpenemsException("Unsupported Wi-Fi action");
@@ -95,11 +121,103 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 		}
 	}
 	@Override public String gpio(String action, String settingsJson) throws OpenemsException {
-		if (!List.of("status", "save").contains(action)) throw new OpenemsException("Unsupported GPIO action");
-		try { var p = new ProcessBuilder("sudo", "-n", "/usr/local/sbin/maxiems-gpio", action).redirectErrorStream(true).start(); if (settingsJson != null) { p.getOutputStream().write(settingsJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); p.getOutputStream().close(); } var out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8); if (p.waitFor() != 0) throw new OpenemsException(out.isBlank() ? "GPIO helper failed" : out.trim()); return out; } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new OpenemsException("GPIO request interrupted"); } catch (java.io.IOException e) { throw new OpenemsException("GPIO helper failed: " + e.getMessage()); }
+		if (!List.of("status", "save", "switch").contains(action)) throw new OpenemsException("Unsupported GPIO action");
+		if ("switch".equals(action)) {
+			try {
+				var request = com.google.gson.JsonParser.parseString(settingsJson).getAsJsonObject();
+				var mode = request.get("mode").getAsString();
+				if (!List.of("GPIO", "UART3").contains(mode)) throw new OpenemsException("mode must be GPIO or UART3");
+			} catch (NullPointerException | IllegalStateException e) {
+				throw new OpenemsException("mode must be GPIO or UART3");
+			}
+		}
+		try {
+			var process = new ProcessBuilder("sudo", "-n", "/usr/local/sbin/maxiems-gpio", action).start();
+			try (var stdin = process.getOutputStream()) {
+				if ("save".equals(action) || "switch".equals(action)) {
+					stdin.write(settingsJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+				}
+			}
+			if (!process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) {
+				process.destroyForcibly();
+				throw new OpenemsException("GPIO helper timed out");
+			}
+			var output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+			if (!output.isBlank()) {
+				try {
+					var response = com.google.gson.JsonParser.parseString(output).getAsJsonObject();
+					if (response.has("confirmed") && response.has("errorCode")) {
+						if (process.exitValue() != 0 && response.get("confirmed").getAsBoolean()) {
+							throw new OpenemsException("GPIO helper exited with failure despite confirmed response");
+						}
+						this.attachAlarmSource(response);
+						return response.toString();
+					}
+				} catch (RuntimeException ignored) {
+					// A non-JSON sudo or helper failure is reported below.
+				}
+			}
+			throw new OpenemsException("GPIO helper failed (exit " + process.exitValue() + ")");
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new OpenemsException("GPIO request interrupted");
+		} catch (java.io.IOException e) {
+			throw new OpenemsException("GPIO helper failed: " + e.getMessage());
+		}
+	}
+
+	private void attachAlarmSource(com.google.gson.JsonObject response) {
+		var outputs = response.getAsJsonObject("strings");
+		if (outputs == null) return;
+		for (int index = 1; index <= 2; index++) {
+			final int stringIndex = index;
+			var output = outputs.getAsJsonObject(Integer.toString(index));
+			if (output == null) continue;
+			var source = MonitoringAlarmStore.SensorOutputState.UNKNOWN;
+			boolean frameCurrent = false;
+			try {
+				if (this.database.isAvailable()) {
+					var store = new MonitoringAlarmStore(this.database);
+					source = store.sensorOutputState("str" + index);
+					if (source == MonitoringAlarmStore.SensorOutputState.STRING_NOT_FOUND) {
+						frameCurrent = true;
+					} else {
+						var matching = this.monitoringProviders.stream()
+								.filter(provider -> ("str" + stringIndex).equals(provider.stringKey())).toList();
+						if (matching.size() == 1) {
+							var frame = matching.get(0).latestFrame();
+							frameCurrent = frame != null && ("str" + index).equals(frame.stringKey())
+									&& frame.capturedAt() != null
+									&& !frame.capturedAt().isBefore(Instant.now()
+											.minusSeconds(matching.get(0).snapshotFreshnessSeconds()))
+									&& store.sensorOutputCheckpointMatches("str" + index,
+											frame.publicationGeneration(), frame.publicationRevision());
+						}
+					}
+				}
+			} catch (java.sql.SQLException e) {
+				// The maintenance API must show unavailable rather than imply a clear alarm.
+			}
+			output.addProperty("alarmSourceState", source.name());
+			boolean active = source == MonitoringAlarmStore.SensorOutputState.ACTIVE;
+			boolean available = source == MonitoringAlarmStore.SensorOutputState.ACTIVE
+					|| source == MonitoringAlarmStore.SensorOutputState.INACTIVE
+					|| source == MonitoringAlarmStore.SensorOutputState.STRING_NOT_FOUND;
+			boolean matching = available && frameCurrent && response.has("activeMode")
+					&& "GPIO".equals(response.get("activeMode").getAsString())
+					&& output.has("alarm") && !output.get("alarm").isJsonNull()
+					&& output.get("alarm").getAsBoolean() == active
+					&& output.has("synchronized") && output.get("synchronized").getAsBoolean();
+			output.addProperty("synchronized", matching);
+		}
 	}
 
 	private TaskStatus start(String type, int stringIndex, Integer value, Integer startId, Integer endId) throws OpenemsException {
+		return this.start(type, stringIndex, value, startId, endId, null, null, null);
+	}
+
+	private TaskStatus start(String type, int stringIndex, Integer value, Integer startId, Integer endId,
+			String moduleType, Integer oldId, Integer newId) throws OpenemsException {
 		synchronized (this.lock) {
 			if (this.status.running) throw new OpenemsException("Maintenance task already running");
 			io.openems.edge.bms.service.strings.model.BmsStringModels.Definition definition;
@@ -108,14 +226,20 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 			} catch (Exception e) {
 				throw new OpenemsException("Unable to resolve BMS string " + stringIndex + ": " + e.getMessage());
 			}
-			this.status = new Mutable(type, stringIndex, definition.bridgeId(), startId, endId); this.stopRequested = false;
-			this.executor.submit(() -> this.run(type, definition, value, startId, endId));
+			this.status = new Mutable(type, stringIndex, definition.bridgeId(), startId, endId);
+			this.status.moduleType = moduleType;
+			this.status.oldId = oldId;
+			this.status.newId = newId;
+			this.status.phase = type.equals("address-change") ? "queued" : null;
+			this.status.verification = type.equals("address-change") ? "NOT_STARTED" : null;
+			this.stopRequested = false;
+			this.executor.submit(() -> this.run(type, definition, value, startId, endId, moduleType, oldId, newId));
 			return this.status.snapshot();
 		}
 	}
 
 	private void run(String type, io.openems.edge.bms.service.strings.model.BmsStringModels.Definition definition, Integer value,
-			Integer startId, Integer endId) {
+			Integer startId, Integer endId, String moduleType, Integer oldId, Integer newId) {
 		BridgeModbusSerial bridge = null; StartStop previous = StartStop.START;
 		String state = "completed";
 		String error = null;
@@ -127,8 +251,25 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 			this.connection = open(bridge); this.status.log("Opened exclusive serial connection");
 			if (type.equals("ir-scan")) scan(startId, endId, false);
 			else if (type.equals("ir-activate")) scan(startId, endId, true);
+			else if (type.equals("address-change")) {
+				var result = ModuleAddressChange.execute(moduleType, oldId, newId,
+						new ModuleAddressChange.Transport() {
+							@Override public int readModule(int id) throws Exception {
+								return read(id, 0x0000, 1)[0];
+							}
+							@Override public void writeAddress(int id, int register, int newUnitId) throws Exception {
+								write(id, register, newUnitId);
+							}
+						}, () -> this.stopRequested, phase -> this.status.phase = phase, this.status::log);
+				this.status.phase = result.phase();
+				this.status.verification = result.verification();
+				if (!result.verified() && !this.stopRequested) {
+					state = "failed";
+					error = "Physical address change not verified: " + result.verification();
+				}
+			}
 			else tc(type, value);
-			state = this.stopRequested ? "stopped" : "completed";
+			if (this.stopRequested) state = "stopped";
 		} catch (Exception e) {
 			state = this.stopRequested ? "stopped" : "failed";
 			error = e.getMessage();
@@ -275,5 +416,5 @@ public class BmsMaintenanceServiceImpl implements BmsMaintenanceService {
 	private void close() { var c=this.connection; if(c!=null) try {c.close();} catch(Exception ignored) {} finally {this.connection=null;} }
 	private void sleep(long ms) { try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); this.stopRequested=true; } }
 	private void finish(String state,String error) { synchronized(this.lock) { this.status.running=false; this.status.state=state; this.status.error=error; } }
-	private static class Mutable { volatile String type="idle",state="idle",bridgeId,serialPort,error; volatile Integer stringIndex,startId,endId,currentId,nextId,range,calibration,calibrationRaw,firstCurrent,latestCurrentRaw,latestCurrentSigned,samples=0,successful=0; volatile Double latestCurrent; volatile boolean running,changed; List<Integer> active=new CopyOnWriteArrayList<>(),missing=new CopyOnWriteArrayList<>(),activated=new CopyOnWriteArrayList<>(),notActivated=new CopyOnWriteArrayList<>(); List<String> output=new CopyOnWriteArrayList<>(); Mutable(){} Mutable(String t,int i,String b,Integer start,Integer end){type=t;stringIndex=i;bridgeId=b;startId=start;endId=end;running=true;state="running";} void log(String s){output.add(Instant.now()+" "+s);if(output.size()>200)output.remove(0);} TaskStatus snapshot(){return new TaskStatus(type,state,stringIndex,bridgeId,serialPort,startId,endId,running,currentId,nextId,List.copyOf(active),List.copyOf(missing),List.copyOf(activated),List.copyOf(notActivated),range,calibration,calibrationRaw,firstCurrent,latestCurrentRaw,latestCurrentSigned,latestCurrent,samples,successful,changed,error,List.copyOf(output));} }
+	private static class Mutable { volatile String type="idle",state="idle",bridgeId,serialPort,error,moduleType,phase,verification; volatile Integer stringIndex,startId,endId,currentId,nextId,range,calibration,calibrationRaw,firstCurrent,latestCurrentRaw,latestCurrentSigned,samples=0,successful=0,oldId,newId; volatile Double latestCurrent; volatile boolean running,changed; List<Integer> active=new CopyOnWriteArrayList<>(),missing=new CopyOnWriteArrayList<>(),activated=new CopyOnWriteArrayList<>(),notActivated=new CopyOnWriteArrayList<>(); List<String> output=new CopyOnWriteArrayList<>(); Mutable(){} Mutable(String t,int i,String b,Integer start,Integer end){type=t;stringIndex=i;bridgeId=b;startId=start;endId=end;running=true;state="running";} void log(String s){output.add(Instant.now()+" "+s);if(output.size()>200)output.remove(0);} TaskStatus snapshot(){return new TaskStatus(type,state,stringIndex,bridgeId,serialPort,startId,endId,running,currentId,nextId,List.copyOf(active),List.copyOf(missing),List.copyOf(activated),List.copyOf(notActivated),range,calibration,calibrationRaw,firstCurrent,latestCurrentRaw,latestCurrentSigned,latestCurrent,samples,successful,changed,error,List.copyOf(output),moduleType,oldId,newId,phase,verification);} }
 }

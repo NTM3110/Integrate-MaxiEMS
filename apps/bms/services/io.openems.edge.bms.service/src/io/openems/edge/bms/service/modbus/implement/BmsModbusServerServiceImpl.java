@@ -31,6 +31,7 @@ public class BmsModbusServerServiceImpl implements BmsModbusServerService {
 	public static final String SERVER_FACTORY = "Controller.Bms.ModbusTcp";
 	public static final String SERVER_ID = "ctrlBmsModbusTcp0";
 	public static final String SERIAL_FACTORY = "Bridge.Modbus.Serial";
+	public static final String BMS_SERIAL_FACTORY = "Bridge.BmsModbus.Serial";
 	public static final String RESERVED_BY = "maxiems.modbusServerReservedBy";
 	public static final String PREVIOUS_ENABLED = "maxiems.modbusServerPreviousEnabled";
 	private static final List<String> PORT_IDS = List.of("modbus0", "modbus1", "modbus2");
@@ -198,7 +199,8 @@ public class BmsModbusServerServiceImpl implements BmsModbusServerService {
 	}
 
 	private List<Configuration> managedBridges() throws Exception {
-		var all = this.configurationAdmin.listConfigurations("(" + ConfigurationAdmin.SERVICE_FACTORYPID + "=" + SERIAL_FACTORY + ")");
+		var all = this.configurationAdmin.listConfigurations("(|(" + ConfigurationAdmin.SERVICE_FACTORYPID + "="
+				+ SERIAL_FACTORY + ")(" + ConfigurationAdmin.SERVICE_FACTORYPID + "=" + BMS_SERIAL_FACTORY + "))");
 		var result = new ArrayList<Configuration>();
 		if (all != null) for (var configuration : all) {
 			var id = string(configuration.getProperties(), "id");
@@ -247,7 +249,8 @@ public class BmsModbusServerServiceImpl implements BmsModbusServerService {
 		for (var configuration : configurations) {
 			var properties = configuration.getProperties();
 			if (configuration == selected || SERVER_FACTORY.equals(configuration.getFactoryPid())
-					|| (SERIAL_FACTORY.equals(configuration.getFactoryPid())
+					|| ((SERIAL_FACTORY.equals(configuration.getFactoryPid())
+							|| BMS_SERIAL_FACTORY.equals(configuration.getFactoryPid()))
 							&& selectedId.equals(string(properties, "id")))) continue;
 			if (properties != null && (bool(properties, "enabled", false) || !string(properties, RESERVED_BY).isBlank())) {
 				throw new IllegalStateException("Physical serial path is already owned by " + string(properties, "id"));

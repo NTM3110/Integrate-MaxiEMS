@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import io.openems.edge.bms.service.calculation.model.CapacityTemperatureFactor;
 import io.openems.edge.bms.service.calibration.implement.CalibrationDemoTimeScale;
+import io.openems.edge.bms.service.calibration.implement.CalibrationDischargeSampling;
 import io.openems.edge.bms.service.calibration.implement.CalibrationMeasurementValidator;
 import io.openems.edge.bms.service.calibration.model.CalibrationEventConfiguration.DischargeEndpointMode;
 import io.openems.edge.bms.service.calibration.model.CalibrationStageEvaluation.Milestone;
@@ -242,7 +243,12 @@ public final class DischargeStageMonitor implements CalibrationStageMonitor<Disc
 			return false;
 		}
 		long elapsedMillis = measurement.currentMeasuredAt() - checkpoint.lastCurrentMeasuredAt();
-		return elapsedMillis > 0 && elapsedMillis <= configuration.sampleIntervalSeconds() * 1_000L;
+		// The 2-second demo persistence cadence is shorter than one complete TA/TC
+		// batch. Keep the integration gap in wall-clock time, but allow one normal
+		// 30-second BMS acquisition cycle before treating the next value as an anchor.
+		long maximumContinuousGapSeconds = Math.max(configuration.sampleIntervalSeconds(),
+				CalibrationDischargeSampling.PERIODIC_WALL_CLOCK_SECONDS);
+		return elapsedMillis > 0 && elapsedMillis <= maximumContinuousGapSeconds * 1_000L;
 	}
 
 	private static CellUpdate updatePerCellState(CalibrationEventConfiguration configuration,

@@ -54,6 +54,24 @@ public class BmsModbusServerJsonApiTest {
 		assertEquals("Port 2", port.get("displayName").getAsString());
 		assertEquals("/dev/ttyS7", port.get("portName").getAsString());
 		assertTrue(port.get("selected").getAsBoolean());
+		var map = json.getAsJsonObject("registerMap");
+		assertEquals(3, map.get("version").getAsInt());
+		assertEquals(4, map.get("functionCode").getAsInt());
+		assertEquals(1000, map.get("stringStride").getAsInt());
+		assertEquals(36, map.get("registersPerString").getAsInt());
+		assertEquals(35, map.get("alarmActiveRelativeAddress").getAsInt());
+		assertEquals(36, map.get("alarmValidityRelativeAddress").getAsInt());
+		assertEquals("0x80000000", map.get("unavailableS32").getAsString());
+		assertEquals(17, map.getAsJsonArray("measurements").size());
+		var voltage = map.getAsJsonArray("measurements").get(0).getAsJsonObject();
+		assertEquals(1, voltage.get("relativeAddress").getAsInt());
+		assertEquals(2, voltage.get("registerCount").getAsInt());
+		assertEquals("SIGNED_32", voltage.get("type").getAsString());
+		assertEquals("Battery Voltage", voltage.get("label").getAsString());
+		assertEquals(100, voltage.get("scale").getAsInt());
+		assertEquals(12, map.getAsJsonArray("alarmBits").size());
+		assertEquals("Sensor/Module Failure", map.getAsJsonArray("alarmBits").get(11)
+				.getAsJsonObject().get("label").getAsString());
 	}
 
 	private static AuthenticatedPrincipal principal(PlatformRole role) {

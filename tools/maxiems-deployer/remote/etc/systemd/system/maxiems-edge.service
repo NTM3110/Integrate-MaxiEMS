@@ -2,7 +2,8 @@
 Description=MAXiEMS OpenEMS Edge
 Documentation=https://openems.github.io/openems.io/openems/latest/edge/
 Wants=network-online.target
-After=network-online.target
+Requires=maxiems-gpio-mode.service
+After=network-online.target maxiems-gpio-mode.service
 
 [Service]
 Type=simple
@@ -10,6 +11,7 @@ User=openems
 Group=openems
 WorkingDirectory=/var/lib/openems
 UMask=0027
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 ExecStart=/usr/bin/java \
  -Dorg.osgi.framework.storage=/var/lib/openems/osgi-cache \
  -Dfelix.cm.dir=/var/lib/maxiems/shared/config/ \

@@ -21,6 +21,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -39,6 +41,9 @@ import io.openems.edge.bms.drivers.huasu.tc.BmsHuasuTc;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
+import io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge;
+import io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge.CompletedBatch;
+import io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge.Outcome;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -68,6 +73,7 @@ import io.openems.edge.bms.service.strings.model.SocCheckpointPolicy;
 		configurationPolicy = ConfigurationPolicy.REQUIRE)
 public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponent
 		implements OpenemsComponent, Controller, BmsStringCalculator {
+	private static final Logger LOG = LoggerFactory.getLogger(ControllerBmsHuasuTcBulkCreatorImpl.class);
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
@@ -116,6 +122,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 	private UUID snapshotGeneration;
 	private long snapshotGenerationStartedAt;
 	private long lastScheduledCalculationAt;
+	private String lastProcessedBatchGeneration;
+	private long lastProcessedBatchId;
 	private String lastEstimatorReferenceIdentity;
 	private String lastCheckpointRestoreIdentity;
 	private Config config;
@@ -155,6 +163,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		this.snapshotGeneration = UUID.randomUUID();
 		this.snapshotGenerationStartedAt = System.currentTimeMillis();
 		this.lastScheduledCalculationAt = 0;
+		this.lastProcessedBatchGeneration = null;
+		this.lastProcessedBatchId = 0;
 		this.lastEstimatorReferenceIdentity = null;
 		this.lastCheckpointRestoreIdentity = null;
 	}
@@ -191,6 +201,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		this.snapshotGeneration = null;
 		this.snapshotGenerationStartedAt = 0;
 		this.lastScheduledCalculationAt = 0;
+		this.lastProcessedBatchGeneration = null;
+		this.lastProcessedBatchId = 0;
 		this.lastEstimatorReferenceIdentity = null;
 		this.lastCheckpointRestoreIdentity = null;
 		super.deactivate();
@@ -245,14 +257,53 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 			return;
 		}
 		var now = System.currentTimeMillis();
-		if (!shouldRunScheduledCalculation(this.lastScheduledCalculationAt, now,
-				this.config.snapshotIntervalSeconds())) {
-			return;
+		CompletedBatch batch = null;
+		BmsModbusBatchBridge batchBridge = null;
+		try {
+			var bridgeId = this.config.modbusId().split(",", 2)[0].trim();
+			var bridge = this.componentManager.getComponent(bridgeId);
+			if (bridge instanceof BmsModbusBatchBridge foundBridge) {
+				batchBridge = foundBridge;
+				batch = batchBridge.getCompletedBatch();
+				if (batch == null || batch.generation().equals(this.lastProcessedBatchGeneration)
+						&& batch.batchId() == this.lastProcessedBatchId) {
+					return;
+				}
+			} else if (!shouldRunScheduledCalculation(this.lastScheduledCalculationAt, now,
+					this.config.snapshotIntervalSeconds())) {
+				return;
+			}
+		} catch (OpenemsNamedException e) {
+			throw new OpenemsNamedException(OpenemsError.GENERIC,
+					"Unable to find BMS Modbus bridge [" + this.config.modbusId() + "]: " + exceptionSummary(e));
+		}
+		var calculationStartedAt = System.currentTimeMillis();
+		var previousSnapshot = this.latestSnapshot;
+		if (batch != null) {
+			LOG.info("BMS calculator batch processing started: calculator={} stringKey={} generation={} batchId={}",
+					this.config.id(), this.config.stringKey(), batch.generation(), batch.batchId());
 		}
 		try {
-			this.calculateNow();
+			this.calculateNow(batch);
 			this.lastScheduledCalculationAt = now;
+			if (batch != null) {
+				if (!batchBridge.acknowledgeProcessed(batch.generation(), batch.batchId())) {
+					throw new IllegalStateException("BMS batch disappeared before calculator acknowledgement");
+				}
+				this.lastProcessedBatchGeneration = batch.generation();
+				this.lastProcessedBatchId = batch.batchId();
+				var publishedSnapshot = this.latestSnapshot;
+				LOG.info("BMS calculator batch processed: calculator={} stringKey={} generation={} batchId={} durationMs={} snapshot={} result={}",
+						this.config.id(), this.config.stringKey(), batch.generation(), batch.batchId(),
+						System.currentTimeMillis() - calculationStartedAt,
+						publishedSnapshot == null ? "none" : publishedSnapshot.generation() + "/" + publishedSnapshot.sequence(),
+						publishedSnapshot == previousSnapshot ? "unchanged" : "published");
+			}
 		} catch (Exception e) {
+			if (batch != null) {
+				LOG.warn("BMS calculator batch processing failed: calculator={} stringKey={} generation={} batchId={} reason={}",
+						this.config.id(), this.config.stringKey(), batch.generation(), batch.batchId(), exceptionSummary(e));
+			}
 			throw new OpenemsNamedException(OpenemsError.GENERIC,
 					"Unable to calculate BMS string [" + this.config.stringId() + "]: " + exceptionSummary(e));
 		}
@@ -262,14 +313,22 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		return lastScheduledAt == 0 || now - lastScheduledAt >= Math.max(1, intervalSeconds) * 1_000L;
 	}
 
+	static boolean sourceFreshInBatch(CompletedBatch batch, String sourceId, boolean communicationFailed) {
+		return batch == null ? !communicationFailed : batch.outcomes().get(sourceId) == Outcome.SUCCESS;
+	}
+
 	/**
 	 * Runs one scheduled calculation. The JSON API never invokes this method; it
 	 * reads only the last immutable snapshot published at the end of this method.
 	 */
 	public synchronized void calculateNow() throws Exception {
+		this.calculateNow(null);
+	}
+
+	synchronized void calculateNow(CompletedBatch batch) throws Exception {
 		var cycleAt = System.currentTimeMillis();
 		try {
-			var hasMeasurements = this.calculateExistingString(cycleAt);
+			var hasMeasurements = this.calculateExistingString(cycleAt, batch);
 			if (hasMeasurements) {
 				this.lastCalculationError = null;
 				this.consecutiveSnapshotFailures = 0;
@@ -296,7 +355,7 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		return message == null || message.isBlank() ? className : className + ": " + message;
 	}
 
-	private boolean calculateExistingString(long cycleAt) throws Exception {
+	private boolean calculateExistingString(long cycleAt, CompletedBatch batch) throws Exception {
 		this.hasCalculatedSoc = false;
 		this.hasCalculatedSoh = false;
 		/* These describe the current calculation cycle, not historic channel data. */
@@ -311,9 +370,9 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 		var tc = this.tc();
 		var currentValue = tc.getStringCurrent();
 		var rawCurrent = currentValue.get();
-		var ambientRaw = tc.getAmbientTemperature().get();
-		var tcCommunicationFailed = tc instanceof ModbusComponent modbusComponent
-				&& modbusComponent.getModbusCommunicationFailed();
+		var tcCommunicationFailed = !sourceFreshInBatch(batch, tc.id(),
+				tc instanceof ModbusComponent modbusComponent && modbusComponent.getModbusCommunicationFailed());
+		var ambientRaw = tcCommunicationFailed ? null : tc.getAmbientTemperature().get();
 		var previousSnapshot = this.latestSnapshot;
 		var currentProvenance = adaptCurrent(currentValue, tcCommunicationFailed, previousSnapshot,
 				this.snapshotGenerationStartedAt);
@@ -366,7 +425,8 @@ public class ControllerBmsHuasuTcBulkCreatorImpl extends AbstractOpenemsComponen
 						cellMeasuredAts, cellQualities);
 				continue;
 			}
-			if (ta instanceof ModbusComponent modbusComponent && modbusComponent.getModbusCommunicationFailed()) {
+			if (!sourceFreshInBatch(batch, ta.id(),
+					ta instanceof ModbusComponent modbusComponent && modbusComponent.getModbusCommunicationFailed())) {
 				availabilityWarnings[offset] = "MODBUS_COMMUNICATION_FAILED";
 				copyPreviousCell(previousSnapshot, cell, offset, voltages, temperatures, resistances, socs, sohs, irs);
 				applyCellProvenance(cellProvenance(previousSnapshot, cell, cycleAt, false), offset,

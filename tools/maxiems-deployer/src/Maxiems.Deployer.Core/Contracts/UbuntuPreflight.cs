@@ -45,4 +45,7 @@ public sealed record PreflightIssue(PreflightIssueCode Code, string Subject);
 public sealed record UbuntuPreflightResult(
     bool IsSupported,
     SupportedArchitecture? Architecture,
-    ImmutableArray<PreflightIssue> Issues);
+    ImmutableArray<PreflightIssue> Issues)
+{
+    public ImmutableArray<PreflightIssue> Warnings { get; init; } = [];
+}

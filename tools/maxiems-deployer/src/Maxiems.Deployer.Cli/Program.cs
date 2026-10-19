@@ -69,17 +69,23 @@ internal static class Program
             }
             if (decision.Status == HostTrustStatus.FirstSeen)
             {
-                Console.Write("Trust this host key? [y/N]: ");
-                if (!HostTrustConfirmation.IsConfirmed(Console.ReadLine()))
+                if (!options.LocalBootstrap)
                 {
-                    Console.Error.WriteLine("Host trust not confirmed.");
-                    return 2;
+                    Console.Write("Trust this host key? [y/N]: ");
+                    if (!HostTrustConfirmation.IsConfirmed(Console.ReadLine()))
+                    {
+                        Console.Error.WriteLine("Host trust not confirmed.");
+                        return 2;
+                    }
                 }
                 await coordinator.ConfirmAsync(decision, cancellation.Token).ConfigureAwait(false);
             }
             File.SetUnixFileMode(trustPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            bootstrap = Prompt("Bootstrap SSH / sudo password (empty for key and passwordless sudo): ", cancellation.Token);
-            passphrase = Prompt("SSH private-key passphrase (empty if unencrypted): ", cancellation.Token);
+            if (!options.LocalBootstrap)
+            {
+                bootstrap = Prompt("Bootstrap SSH / sudo password (empty for key and passwordless sudo): ", cancellation.Token);
+                passphrase = Prompt("SSH private-key passphrase (empty if unencrypted): ", cancellation.Token);
+            }
             management = Prompt("OpenEMS management password (required; separate from BMS admin/admin): ", cancellation.Token);
             OpenEmsManagementPassword.RequireNonEmpty(management, nameof(management));
             redactor = new SecretRedactor([new("privateKeyPath", options.Identity), new("password", new string(management)),
@@ -89,6 +95,8 @@ internal static class Program
             {
                 RequireRebootAcceptance = options.RequireReboot,
                 TargetProfile = options.TargetProfile,
+                KioskMode = options.KioskMode,
+                LocalBootstrap = options.LocalBootstrap,
                 KeepFailedReleaseForInspection = options.KeepFailedReleaseForInspection
             };
             var result = await new DeploymentEngine(trust).RunAsync(request,

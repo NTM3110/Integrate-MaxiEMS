@@ -32,6 +32,18 @@ public sealed class SshBootstrapAuthenticationTests
     }
 
     [TestMethod]
+    public void LocalBootstrapUsesRootOwnedFixedHelperWhileRemoteUsesStagedHelper()
+    {
+        const string staging = "/tmp/maxiems-bootstrap-0123456789abcdef0123456789abcdef";
+        Assert.AreEqual(
+            $"/run/maxiems-local-bootstrap-helper install-layout {staging}",
+            SshBootstrapSession.BuildBootstrapHelperCommand(staging, localBootstrap: true));
+        Assert.AreEqual(
+            $"{staging}/maxiems-bootstrap-helper install-layout {staging}",
+            SshBootstrapSession.BuildBootstrapHelperCommand(staging, localBootstrap: false));
+    }
+
+    [TestMethod]
     public void WorkerPreflightVerifiesSudoThroughStandardInputWhileKeyModeRemainsNonInteractive()
     {
         var request = new RemoteCommandRequest(RemoteProgram.SudoProbe, [], TimeSpan.FromSeconds(5));

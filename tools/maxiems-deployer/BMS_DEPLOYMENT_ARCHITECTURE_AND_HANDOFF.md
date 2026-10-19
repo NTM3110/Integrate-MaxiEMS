@@ -409,6 +409,12 @@ không nằm trong inventory nên contract này không tạo vòng self-referenc
 `payloadArchiveSha256` tiếp tục kiểm tra nguyên vẹn byte của file ZIP. Release
 `SHA256SUMS` ghi thêm dòng comment `# payloadHash: <64 hex>` để tra cứu nhanh;
 `sha256sum -c SHA256SUMS` bỏ qua dòng comment này và vẫn kiểm tra các file.
+Full release còn có `release.txt` cạnh `payload.zip`, được bao phủ bởi
+`SHA256SUMS`. File gồm release ID, build UTC, Git revision và canonical
+`payloadHash`. Sau khi xác thực ZIP, target helper tạo cùng nội dung trong
+`/opt/maxiems/releases/<release-id>/release.txt`; `/opt/maxiems/current/release.txt`
+luôn theo bản active. `release.txt` không thuộc canonical payload inventory vì
+nó chứa chính release ID/hash. Release cũ chưa có file thì đọc `manifest.json`.
 
 ## 8. Build release
 
@@ -638,7 +644,7 @@ ValidateInput
 - verify local UI HTTP response;
 - verify every installed file hash;
 - verify Felix `8080` và BMS WebSocket `8085` bind `0.0.0.0`; management
-  `8084` và optional `502` chỉ bind loopback;
+  `8084` chỉ bind loopback; Modbus Server `502` dùng bind IP đã cấu hình;
 - verify schema versions 1–8 và admin role;
 - call BMS `platformReady`;
 - fresh install: login `admin/admin`, token role `PLATFORM_ADMIN`, logout;
@@ -1463,6 +1469,7 @@ Call:
 ```text
 RunAsync("runtime-config")
   -> maxiems-runtime-config-ops
+  -> maxiems-kiosk-ops
 ```
 
 Helper lấy candidate từ active release:
@@ -1484,6 +1491,48 @@ Sau install:
 - remove nginx default/recognized legacy site;
 - chạy `daemon-reload` và `nginx -t`;
 - EXIT trap restore last-good nếu bất kỳ bước nào lỗi.
+
+Kiosk BMS dùng maxiems-kiosk-ops sau cấu hình Edge/nginx. Helper cài
+/etc/systemd/system/maxiems-kiosk.service và Sway include trong
+/home/admin/.config/sway/config.d/maxiems-kiosk.conf. System unit enable vào
+`multi-user.target` nhưng chạy bằng `User=admin`/`Group=admin`, nên operator dùng
+`sudo systemctl enable|start|status maxiems-kiosk.service`. Supervisor có thể
+start trước Sway; nó chờ private `/run/user/<admin-uid>` và Unix socket
+`wayland-N` thật thuộc `admin`, rồi truyền `XDG_RUNTIME_DIR`/`WAYLAND_DISPLAY`
+cho Chromium. Sway include không start service. Unit/include không đổi thì không
+ghi lại; service active với unit không đổi thì không restart. Sway và Chromium phải được cài
+sẵn vì offline cache chưa phân phối chúng. Installer chỉ thay Sway launcher
+cũ khi nhận diện đúng nội dung và dọn GNOME autostart cũ do MaxiEMS quản lý.
+
+Mode managed cài thêm drop-in `getty@tty1` để local console tự login `admin` và
+launcher root-owned `/etc/profile.d/90-maxiems-kiosk-sway.sh`. Launcher xác nhận
+`/dev/tty1`, loại SSH và display đang tồn tại rồi mới `exec sway`. Khi tty1 đang
+có user, helper chờ logout/reboot thay vì cắt session. Transaction phục hồi cả
+hai asset và trạng thái getty; mode preserve không kiểm tra hay thay đổi chúng.
+Managed upgrade dừng và gỡ exact user unit cùng enable link của release cũ;
+asset không nhận diện hoặc symlink không an toàn bị từ chối trước mutation.
+Transaction snapshot Sway config/include, system unit/service state, legacy user
+unit/link/active state và autostart cũ để rollback.
+
+Virtual keyboard không nằm trong bundle Java. `BMS.Keyboard` chỉ gọi constrained
+helper; full payload phải chứa `helpers/maxiems-keyboard-controller` và ARM64
+`helpers/wvkbd-mobintl`. Sway start controller trong đúng Wayland environment;
+controller sở hữu tối đa một wvkbd child và nhận action qua FIFO
+`/var/lib/maxiems/kbd/kbd-command`. Bootstrap cài `/usr/local/sbin/maxiems-keyboard`
+và ba exact sudo action. Managed kiosk thêm `admin` vào group `openems`, tạo
+directory FIFO với `root:openems 0770`; session đã chạy cần logout/reboot để
+nhận group mới. Frontend phát normal/dialer/hide từ focus toàn cục sau platform
+readiness; anonymous login chỉ được gửi normal. System unit giữ `PrivateTmp`
+nhưng không đặt `NoNewPrivileges`, vì launcher Snap Chromium cần privilege
+transition trước khi browser tiếp tục dưới `User=admin`; supervisor ưu tiên
+binary `/snap/bin/chromium`.
+
+CLI `--kiosk managed|preserve` chọn cách xử lý kiosk, mặc định `managed`.
+`runtime-config` luôn chạy `maxiems-runtime-config-ops` và migration WebSocket;
+chỉ `managed` gọi `maxiems-kiosk-ops`. `preserve` không thay unit, autostart,
+Sway include hoặc trạng thái service kiosk; rollback cũng bỏ qua các mục kiosk.
+Mode được ghi vào report ở check `kiosk-mode`. Payload compatibility gate yêu
+cầu exact helper/sudoers protocol của cả hai mode trước khi SSH.
 
 Key systemd behavior:
 
@@ -1656,7 +1705,8 @@ Nó verify:
 - legacy OpenEMS inactive/disabled;
 - `8080` và `8085` tồn tại dưới IPv4 và bind wildcard; parser chấp nhận cả
   `0.0.0.0:PORT` và cách iproute2 render tương đương `*:PORT`;
-- `8084` và optional `502` nếu tồn tại chỉ bind loopback.
+- `8084` nếu tồn tại chỉ bind loopback; Modbus Server `502` dùng bind IP đã cấu
+  hình và Edge unit có `CAP_NET_BIND_SERVICE` để mở cổng đặc quyền.
 
 #### Database/BMS check
 

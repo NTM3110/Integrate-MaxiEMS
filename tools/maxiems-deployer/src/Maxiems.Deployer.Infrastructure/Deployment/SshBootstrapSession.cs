@@ -63,9 +63,13 @@ public sealed class SshBootstrapSession : IRemoteCommandTransport, IAsyncDisposa
     public async Task InstallAsync(
         IReadOnlyCollection<BootstrapPayloadAsset> assets,
         string publicKey,
+        bool localBootstrap,
         CancellationToken cancellationToken)
     {
-        await this.EnrollPublicKeyAsync(publicKey, cancellationToken).ConfigureAwait(false);
+        if (!localBootstrap)
+        {
+            await this.EnrollPublicKeyAsync(publicKey, cancellationToken).ConfigureAwait(false);
+        }
         var staging = $"/tmp/maxiems-bootstrap-{Guid.NewGuid():N}";
         await RunCheckedAsync($"/usr/bin/install -d -m 0700 -- {staging}", cancellationToken).ConfigureAwait(false);
         try
@@ -76,9 +80,12 @@ public sealed class SshBootstrapSession : IRemoteCommandTransport, IAsyncDisposa
                 await this.sftp.UploadFileAsync(source, $"{staging}/{asset.RemoteName}", cancellationToken)
                     .ConfigureAwait(false);
             }
-            await RunCheckedAsync($"/usr/bin/chmod 0700 -- {staging}/maxiems-bootstrap-helper", cancellationToken)
-                .ConfigureAwait(false);
-            var helper = $"{staging}/maxiems-bootstrap-helper install-layout {staging}";
+            var helper = BuildBootstrapHelperCommand(staging, localBootstrap);
+            if (!localBootstrap)
+            {
+                await RunCheckedAsync($"/usr/bin/chmod 0700 -- {staging}/maxiems-bootstrap-helper", cancellationToken)
+                    .ConfigureAwait(false);
+            }
             if (this.bootstrapPassword.IsEmpty)
             {
                 await RunCheckedAsync(BuildSudoCommand(helper, usePassword: false), cancellationToken).ConfigureAwait(false);
@@ -118,6 +125,10 @@ public sealed class SshBootstrapSession : IRemoteCommandTransport, IAsyncDisposa
     internal static string BuildSudoCommand(string helper, bool usePassword) => usePassword
         ? $"/usr/bin/sudo -S -p '' -- {helper}"
         : $"/usr/bin/sudo -n {helper}";
+
+    internal static string BuildBootstrapHelperCommand(string staging, bool localBootstrap) => localBootstrap
+        ? $"/run/maxiems-local-bootstrap-helper install-layout {staging}"
+        : $"{staging}/maxiems-bootstrap-helper install-layout {staging}";
 
     public async Task<RemoteCommandResult> ExecuteAsync(
         RemoteCommandRequest request,

@@ -10,8 +10,10 @@ readonly STATE='/var/lib/maxiems/state/runtime-config'
 /usr/bin/install --owner=root --group=root --mode=0644 \
 	"$SOURCE/etc/systemd/system/maxiems-edge.service" "$STATE/maxiems-edge-candidate.service"
 /usr/bin/install --owner=root --group=root --mode=0644 \
+	"$SOURCE/etc/systemd/system/maxiems-gpio-mode.service" "$STATE/maxiems-gpio-mode.service"
+/usr/bin/install --owner=root --group=root --mode=0644 \
 	"$SOURCE/etc/nginx/sites-available/maxiems" "$STATE/maxiems.nginx.candidate"
-/usr/bin/systemd-analyze verify "$STATE/maxiems-edge-candidate.service"
+/usr/bin/systemd-analyze verify "$STATE/maxiems-edge-candidate.service" "$STATE/maxiems-gpio-mode.service"
 
 /usr/bin/printf '%s\n' \
 	'pid /run/nginx-maxiems-test.pid;' \
@@ -27,15 +29,20 @@ readonly STATE='/var/lib/maxiems/state/runtime-config'
 	/var/lib/maxiems/shared/config /var/lib/openems /var/lib/openems/data /var/lib/openems/osgi-cache /var/log/openems
 
 readonly unit_target='/etc/systemd/system/maxiems-edge.service'
+readonly gpio_unit_target='/etc/systemd/system/maxiems-gpio-mode.service'
 readonly nginx_target='/etc/nginx/sites-available/maxiems'
 readonly nginx_link='/etc/nginx/sites-enabled/maxiems'
 readonly default_link='/etc/nginx/sites-enabled/default'
 unit_existed=false
 unit_enabled=false
+gpio_unit_existed=false
+gpio_unit_enabled=false
 nginx_existed=false
 default_existed=false
 [[ ! -e "$unit_target" ]] || { /usr/bin/cp -a -- "$unit_target" "$STATE/unit.backup"; unit_existed=true; }
+[[ ! -e "$gpio_unit_target" ]] || { /usr/bin/cp -a -- "$gpio_unit_target" "$STATE/gpio-unit.backup"; gpio_unit_existed=true; }
 /usr/bin/systemctl is-enabled --quiet maxiems-edge.service 2>/dev/null && unit_enabled=true
+/usr/bin/systemctl is-enabled --quiet maxiems-gpio-mode.service 2>/dev/null && gpio_unit_enabled=true
 [[ ! -e "$nginx_target" ]] || { /usr/bin/cp -a -- "$nginx_target" "$STATE/nginx.backup"; nginx_existed=true; }
 [[ ! -e "$default_link" && ! -L "$default_link" ]] \
 	|| { /usr/bin/cp -a --no-dereference "$default_link" "$STATE/default.backup"; default_existed=true; }
@@ -48,6 +55,11 @@ restore_last_good() {
 		/usr/bin/cp -a -- "$STATE/unit.backup" "$unit_target"
 	else
 		/usr/bin/rm -f -- "$unit_target"
+	fi
+	if [[ "$gpio_unit_existed" == 'true' ]]; then
+		/usr/bin/cp -a -- "$STATE/gpio-unit.backup" "$gpio_unit_target"
+	else
+		/usr/bin/rm -f -- "$gpio_unit_target"
 	fi
 	if [[ "$nginx_existed" == 'true' ]]; then
 		/usr/bin/cp -a -- "$STATE/nginx.backup" "$nginx_target"
@@ -64,10 +76,17 @@ restore_last_good() {
 	else
 		/usr/bin/systemctl disable maxiems-edge.service >/dev/null 2>&1 || true
 	fi
+	if [[ "$gpio_unit_enabled" == 'true' ]]; then
+		/usr/bin/systemctl enable maxiems-gpio-mode.service >/dev/null
+	else
+		/usr/bin/systemctl disable maxiems-gpio-mode.service >/dev/null 2>&1 || true
+	fi
 }
 trap restore_last_good EXIT
 /usr/bin/install --owner=root --group=root --mode=0644 \
 	"$STATE/maxiems-edge-candidate.service" "$unit_target"
+/usr/bin/install --owner=root --group=root --mode=0644 \
+	"$STATE/maxiems-gpio-mode.service" "$gpio_unit_target"
 /usr/bin/install --owner=root --group=root --mode=0644 \
 	"$STATE/maxiems.nginx.candidate" "$nginx_target"
 /usr/bin/ln -sfn -- "$nginx_target" "$nginx_link"
@@ -80,6 +99,7 @@ if [[ -e /etc/nginx/sites-enabled/maxicom || -L /etc/nginx/sites-enabled/maxicom
 fi
 /usr/bin/systemctl daemon-reload
 /usr/bin/systemctl enable maxiems-edge.service >/dev/null
+/usr/bin/systemctl enable maxiems-gpio-mode.service >/dev/null
 /usr/sbin/nginx -t
 committed=true
 trap - EXIT

@@ -12,7 +12,11 @@ public interface BmsMaintenanceService {
 			List<Integer> activatedIds, List<Integer> notActivatedIds, Integer transformerRange,
 			Integer calibrationSigned, Integer calibrationRaw, Integer firstCurrentSignedRaw, Integer latestCurrentRaw,
 			Integer latestCurrentSignedRaw, Double latestCurrentAmps, Integer currentSampleIndex,
-			Integer successfulCurrentSamples, Boolean currentChanged, String error, List<String> output) {}
+			Integer successfulCurrentSamples, Boolean currentChanged, String error, List<String> output,
+			String moduleType, Integer oldId, Integer newId, String phase, String verification) {}
+
+	/** Address operations change only the physical module; BMS polling configuration is untouched. */
+	TaskStatus addressChange(int stringIndex, String moduleType, int oldId, int newId) throws OpenemsException;
 
 	TaskStatus status();
 	TaskStatus scanIr(int stringIndex, int startId, int endId) throws OpenemsException;

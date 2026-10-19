@@ -15,6 +15,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent.parent
+WORKSPACE = REPO.parent
 BMS_JAR = REPO / 'platform/applications/io.openems.edge.application/generated/distributions/executable/BMSApp.jar'
 REQUIRED_PACKAGES = {'openjdk-21-jre-headless', 'nginx', 'postgresql', 'python3',
                      'network-manager', 'jq', 'unzip', 'curl', 'ca-certificates', 'sudo',
@@ -104,7 +105,21 @@ def build(jar, ui, packages, architectures, output, revision, source_timestamp, 
                 raise ValueError('Stale BMS API bundle: build service/API jars before exporting BMSApp')
     if not (ui / 'index.html').is_file():
         raise ValueError('UI dist must contain index.html')
-    files = {'edge/openems.jar': jar}
+    keyboard_controller = REPO / 'scripts/maxiems-keyboard-controller'
+    keyboard_binary = WORKSPACE / 'scripts/wvkbd-mobintl'
+    if keyboard_controller.is_symlink() or not keyboard_controller.is_file():
+        raise ValueError('Missing MAXiEMS keyboard controller source')
+    if keyboard_binary.is_symlink() or not keyboard_binary.is_file():
+        raise ValueError('Missing packaged wvkbd-mobintl binary')
+    header = keyboard_binary.read_bytes()[:20]
+    if (len(header) < 20 or header[:6] != b'\x7fELF\x02\x01'
+            or int.from_bytes(header[18:20], 'little') != 183):
+        raise ValueError('wvkbd-mobintl must be a 64-bit little-endian AArch64 ELF binary')
+    files = {
+        'edge/openems.jar': jar,
+        'helpers/maxiems-keyboard-controller': keyboard_controller,
+        'helpers/wvkbd-mobintl': keyboard_binary,
+    }
     for directory, prefix in [(ui, 'ui'), (ROOT / 'payload/bootstrap', 'bootstrap'),
                               (ROOT / 'payload/components', 'components'),
                               (ROOT / 'remote/etc', 'remote/etc'), (ROOT / 'remote/usr', 'remote/usr')]:

@@ -29,6 +29,10 @@ import io.openems.edge.bms.service.persistence.implement.BmsDatabase;
 
 /** Transactional durable alarm lifecycle driven by atomic monitoring frames. */
 public final class MonitoringAlarmStore {
+	/** State of the committed string-level Sensor/Module Failure alarm. */
+	public enum SensorOutputState {
+		ACTIVE, INACTIVE, UNKNOWN, STRING_NOT_FOUND
+	}
 
 	public enum ProcessResult {
 		PROCESSED, DUPLICATE, LATE, STRING_NOT_FOUND
@@ -38,6 +42,43 @@ public final class MonitoringAlarmStore {
 
 	public MonitoringAlarmStore(BmsDatabase database) {
 		this.database = database;
+	}
+
+	public SensorOutputState sensorOutputState(String stringKey) throws SQLException {
+		try (var connection = this.database.getConnection();
+				var statement = connection.prepareStatement("""
+					SELECT p.last_publication_generation,a.lifecycle_status
+					FROM bms.bms_string s
+					LEFT JOIN bms.monitoring_alarm_processor_state p ON p.string_id=s.id
+					LEFT JOIN bms.monitoring_alarm_state a ON a.string_id=s.id
+						AND a.alarm_type='SENSOR_MODULE_FAILURE' AND a.subject_key='STRING'
+					WHERE s.string_key=?
+					""")) {
+			statement.setString(1, stringKey);
+			try (var rows = statement.executeQuery()) {
+				if (!rows.next()) return SensorOutputState.STRING_NOT_FOUND;
+				if (rows.getObject(1) == null || rows.getString(2) == null) return SensorOutputState.UNKNOWN;
+				return "INACTIVE".equals(rows.getString(2)) ? SensorOutputState.INACTIVE : SensorOutputState.ACTIVE;
+			}
+		}
+	}
+
+	public boolean sensorOutputCheckpointMatches(String stringKey, UUID generation, long revision)
+			throws SQLException {
+		try (var connection = this.database.getConnection();
+				var statement = connection.prepareStatement("""
+					SELECT 1 FROM bms.monitoring_alarm_processor_state p
+					JOIN bms.bms_string s ON s.id=p.string_id
+					WHERE s.string_key=? AND p.last_publication_generation=?
+						AND p.last_publication_revision=?
+					""")) {
+			statement.setString(1, stringKey);
+			statement.setObject(2, generation);
+			statement.setLong(3, revision);
+			try (var rows = statement.executeQuery()) {
+				return rows.next();
+			}
+		}
 	}
 
 	public List<MonitoringAlarmService.AlarmOccurrence> list(String stringKey, boolean includeCleared, int offset,

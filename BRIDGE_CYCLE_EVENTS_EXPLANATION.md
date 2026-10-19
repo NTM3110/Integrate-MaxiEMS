@@ -1,4 +1,4 @@
-# How @Bridge Listens for OSGi Cycle Events
+ # How @Bridge Listens for OSGi Cycle Events
 
 ## Overview
 

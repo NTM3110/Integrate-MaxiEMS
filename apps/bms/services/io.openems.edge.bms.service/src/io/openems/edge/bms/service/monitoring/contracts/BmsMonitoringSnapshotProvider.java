@@ -10,4 +10,9 @@ public interface BmsMonitoringSnapshotProvider extends OpenemsComponent {
 	String stringKey();
 
 	BmsMonitoringSnapshot latestFrame();
+
+	/** Maximum age of a frame before its source is no longer current. */
+	default int snapshotFreshnessSeconds() {
+		return 60;
+	}
 }

@@ -166,8 +166,57 @@ Kết quả cần có:
 - navigation có `ntp-server` và `serial-tcp`;
 - `connectivity.tcp` là `true`.
 
-Release directory phải có `maxiems-deployer`, `payload.zip`,
-`payload.zip.sha256`, `SHA256SUMS`, `BMS_DEPLOY.md` và `LINUX.md`.
+Release directory phải có executable `install.sh`, `maxiems-deployer`,
+`maxiems-local-bootstrap-helper`, `payload.zip`, `payload.zip.sha256`,
+`SHA256SUMS`, `release.txt`, `BMS_DEPLOY.md` và `LINUX.md`. Tất cả các file này
+được liệt kê trong `SHA256SUMS`.
+
+### Hai cách chạy cùng một release
+
+Từ máy điều khiển qua SSH:
+
+```bash
+cd "$RELEASE_DIR"
+./install.sh ssh \
+  --host "$TARGET_HOST" \
+  --port "$TARGET_PORT" \
+  --user "$BOOTSTRAP_USER" \
+  --identity "$DEPLOY_KEY" \
+  --deploy-option real \
+  --kiosk managed
+```
+
+Nếu đã copy nguyên release folder lên appliance, không cần tạo deploy key trước:
+
+```bash
+cd /path/to/copied-release
+sudo ./install.sh local --deploy-option real --kiosk managed
+```
+
+`install.sh` resolve mọi artifact theo chính thư mục chứa script, nên có thể gọi
+từ current working directory khác. Nó kiểm tra toàn bộ `SHA256SUMS` trước khi
+SSH hoặc mutate target và từ chối `--payload`/`--payload=...`; operator không
+thể ghép script/CLI mới với payload khác.
+
+Mode `local` cài phần tối thiểu `sudo`/OpenSSH từ repository `.deb` đã verify
+trong payload nếu image chưa có, sau đó tạo bootstrap user, khóa key bằng
+`from="127.0.0.1,::1",restrict`, và dùng sudoers ngắn hạn. Sudoers chỉ cho
+`/usr/bin/true` và helper root-owned cố định tại
+`/run/maxiems-local-bootstrap-helper`; source staging vẫn bị giới hạn bởi format
+`/tmp/maxiems-bootstrap-<32 hex>`. Trap dọn user, private/public key, helper và
+sudoers khi thành công, lỗi hoặc nhận signal. Drop-in OpenSSH tạm bắt buộc
+public-key authentication và tắt password/keyboard-interactive cho user này;
+key chỉ được dùng từ loopback. Trap cũng xóa drop-in rồi reload SSH. Nếu
+`maxiems-deploy` đã có
+`authorized_keys`, script backup và restore file đó; máy trắng không giữ public
+key tạm. `--local-bootstrap` là option nội bộ của CLI và bị từ chối nếu host
+không phải loopback IP literal.
+
+Không dùng `--require-reboot` với mode local vì reboot sẽ giết chính tiến trình
+chịu trách nhiệm cleanup. Hãy hoàn tất local install, reboot riêng, rồi chạy
+health/status theo mục kiểm tra. Cả local và SSH vẫn gọi cùng
+`DeploymentEngine`; phân biệt fresh/update, database migration, transaction,
+health check và rollback không nằm trong Bash.
 
 ## 6. Tạo deploy key và hiểu first deploy flow
 
@@ -346,6 +395,55 @@ cd "$RELEASE_DIR"
   --identity "$DEPLOY_KEY" \
   --deploy-option demo
 ```
+
+### Kiosk trên thiết bị đã có giao diện tự khởi động
+
+Mặc định `--kiosk managed`: deployer cài, enable và start system service
+`maxiems-kiosk.service` bằng systemd, nhưng Chromium chạy với user `admin`.
+Service tự chờ Sway/Wayland rồi mở `http://localhost:80`. Operator kiểm tra bằng
+`sudo systemctl status maxiems-kiosk.service`. Dùng `--kiosk preserve` nếu thiết bị
+đã có kiosk riêng và bạn muốn giữ nguyên service, autostart và cấu hình Sway/GNOME
+hiện tại. Chế độ này vẫn cập nhật Edge, Nginx và WebSocket của BMS.
+
+`managed` còn bật autologin `admin` riêng cho local `tty1` và start Sway từ
+`/etc/profile.d/90-maxiems-kiosk-sway.sh`. Guard của launcher loại SSH, TTY khác
+`/dev/tty1`, và session đã có display. Kiểm tra boot path bằng
+`sudo systemctl status getty@tty1.service` và
+`sudo journalctl -u getty@tty1.service -n 40 --no-pager`.
+
+Full release cũng phải có `helpers/maxiems-keyboard-controller` và ARM64
+`helpers/wvkbd-mobintl`. Managed kiosk thêm `admin` vào group `openems`, tạo
+`/var/lib/maxiems/kbd` với `root:openems 0770` trước khi Sway start controller,
+và bootstrap cài constrained helper `/usr/local/sbin/maxiems-keyboard`
+với ba sudo action exact. Sau deploy/reboot, focus input text/password phải mở
+normal layout; number/tel/inputmode numeric phải mở dialer.
+
+`maxiems-kiosk.service` giữ `PrivateTmp=true` nhưng không dùng
+`NoNewPrivileges`; Snap Chromium cần privilege transition của launcher/user
+namespace rồi browser vẫn chạy dưới `User=admin`. Supervisor ưu tiên
+`/snap/bin/chromium` khi có.
+
+```bash
+cd "$RELEASE_DIR"
+./maxiems-deployer deploy \
+  --host "$TARGET_HOST" \
+  --port "$TARGET_PORT" \
+  --user "$BOOTSTRAP_USER" \
+  --payload ./payload.zip \
+  --identity "$DEPLOY_KEY" \
+  --deploy-option demo \
+  --kiosk preserve
+```
+
+Với thiết bị cần MAXiEMS quản lý Chromium, thêm `--kiosk managed` hoặc bỏ hẳn
+tham số `--kiosk`. Lựa chọn kiosk độc lập với `--deploy-option real|demo`.
+Report deploy ghi lựa chọn tại check `kiosk-mode`. `preserve` không kiểm tra một
+kiosk tự tạo có hoạt động hay không; operator kiểm tra nó sau deploy. Nếu kiosk
+riêng trỏ vào `/opt/maxiems/current`, lần tự khởi động tiếp theo của nó có thể
+đọc UI từ release mới.
+
+CLI có `--kiosk` yêu cầu payload mới chứa helper protocol tương ứng. Hãy build
+full release; dùng CLI mới với `payload.zip` cũ sẽ bị chặn trước khi SSH.
 
 Fresh `demo` mapping:
 

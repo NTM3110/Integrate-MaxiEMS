@@ -1,0 +1,12 @@
+[Unit]
+Description=Restore MAXiEMS GPIO alarm or UART3 mode
+Before=maxiems-edge.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/maxiems-gpio apply
+TimeoutStartSec=15s
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

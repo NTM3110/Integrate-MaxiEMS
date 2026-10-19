@@ -40,7 +40,7 @@ public class BmsSerialBridgeJsonApi implements JsonApi {
 			this.authorize(params);
 			var bridge = this.serialBridges.update(required(params, "id"), optional(params, "alias"), requiredInt(params, "baudRate"),
 					requiredInt(params, "databits"), serialEnum(required(params, "parity"), "PARITY_"),
-					serialEnum(required(params, "stopbits"), "STOPBITS_"));
+					serialEnum(required(params, "stopbits"), "STOPBITS_"), optionalInt(params, "responseTimeoutMs"));
 			return new GenericJsonrpcResponseSuccess(call.getRequest().getId(), json(bridge));
 		});
 	}
@@ -59,6 +59,8 @@ public class BmsSerialBridgeJsonApi implements JsonApi {
 		json.addProperty("databits", value.databits());
 		json.addProperty("parity", value.parity());
 		json.addProperty("stopbits", value.stopbits());
+		json.addProperty("batchAcquisition", value.batchAcquisition());
+		json.addProperty("responseTimeoutMs", value.responseTimeoutMs());
 		return json;
 	}
 
@@ -79,5 +81,18 @@ public class BmsSerialBridgeJsonApi implements JsonApi {
 	private static int requiredInt(JsonObject params, String property) {
 		if (!params.has(property) || params.get(property).isJsonNull()) throw new IllegalArgumentException("Missing " + property);
 		return params.get(property).getAsInt();
+	}
+
+	static Integer optionalInt(JsonObject params, String property) {
+		if (!params.has(property) || params.get(property).isJsonNull()) return null;
+		var value = params.get(property);
+		if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+			throw new IllegalArgumentException(property + " must be an integer");
+		}
+		try {
+			return value.getAsBigDecimal().intValueExact();
+		} catch (ArithmeticException | NumberFormatException e) {
+			throw new IllegalArgumentException(property + " must be an integer", e);
+		}
 	}
 }

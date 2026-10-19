@@ -17,6 +17,7 @@ public sealed class RootHelperProtocolTests
         "maxiems-network-ops",
         "maxiems-prerequisite-ops",
         "maxiems-runtime-config-ops",
+        "maxiems-kiosk-ops",
     ];
 
     [TestMethod]
@@ -197,6 +198,8 @@ public sealed class RootHelperProtocolTests
         StringAssert.Contains(deploy, "has_public_ipv4_listener \"$port\" \"$port_listeners\"");
         StringAssert.Contains(deploy, "/dev/tcp/127.0.0.1/${port}");
         StringAssert.Contains(deploy, "port ${port} has no IPv4-reachable wildcard listener");
+        StringAssert.Contains(deploy, "for port in 8084; do");
+        Assert.IsFalse(deploy.Contains("for port in 8084 502; do", StringComparison.Ordinal));
         StringAssert.Contains(deploy, ".maxiems-known-good");
         StringAssert.Contains(deploy, "/var/lib/maxiems/shared/config");
         Assert.IsFalse(deploy.Contains("rm -rf -- /var/lib/openems/data", StringComparison.Ordinal));

@@ -12,4 +12,4 @@ dotnet publish src/Maxiems.Deployer.Cli/Maxiems.Deployer.Cli.csproj --configurat
 cp LINUX.md "$output/"
 cd -- "$output"
 find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
-"$here/verify-linux-release.sh" "$output"
+"$here/verify-linux-release.sh" "$output" --cli-only

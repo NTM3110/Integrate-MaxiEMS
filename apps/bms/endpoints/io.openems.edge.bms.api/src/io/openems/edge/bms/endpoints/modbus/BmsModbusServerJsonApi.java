@@ -12,6 +12,7 @@ import io.openems.edge.bms.service.auth.model.PlatformRole;
 import io.openems.edge.bms.service.modbus.contracts.BmsModbusServerService;
 import io.openems.edge.bms.service.modbus.model.BmsModbusServerModels.ServerState;
 import io.openems.edge.bms.service.modbus.model.BmsModbusServerModels.Transport;
+import io.openems.edge.bms.service.monitoring.model.BmsMonitoringModbusMap;
 import io.openems.edge.common.jsonapi.JsonApi;
 import io.openems.edge.common.jsonapi.JsonApiBuilder;
 
@@ -85,7 +86,41 @@ public class BmsModbusServerJsonApi implements JsonApi {
 			ports.add(json);
 		}
 		result.add("ports", ports);
+		result.add("registerMap", registerMapJson());
 		return result;
+	}
+
+	private static JsonObject registerMapJson() {
+		var map = new JsonObject();
+		map.addProperty("version", BmsMonitoringModbusMap.CONTRACT_VERSION);
+		map.addProperty("functionCode", 4);
+		map.addProperty("stringStride", BmsMonitoringModbusMap.STRING_STRIDE);
+		map.addProperty("maxStringId", BmsMonitoringModbusMap.MAX_STRING_INDEX);
+		map.addProperty("registersPerString", BmsMonitoringModbusMap.LAST_RELATIVE_ADDRESS);
+		map.addProperty("unavailableS32", "0x80000000");
+		map.addProperty("alarmActiveRelativeAddress", BmsMonitoringModbusMap.ALARM_ACTIVE_MASK_ADDRESS);
+		map.addProperty("alarmValidityRelativeAddress", BmsMonitoringModbusMap.ALARM_VALIDITY_MASK_ADDRESS);
+		var measurements = new JsonArray();
+		for (var register : BmsMonitoringModbusMap.measurementRegisters()) {
+			var item = new JsonObject();
+			item.addProperty("relativeAddress", register.address());
+			item.addProperty("registerCount", register.width());
+			item.addProperty("type", register.type().name());
+			item.addProperty("label", register.label());
+			item.addProperty("unit", register.unit());
+			item.addProperty("scale", register.scale());
+			measurements.add(item);
+		}
+		map.add("measurements", measurements);
+		var alarmBits = new JsonArray();
+		for (var bit : BmsMonitoringModbusMap.alarmBits()) {
+			var item = new JsonObject();
+			item.addProperty("bit", bit.bit());
+			item.addProperty("label", bit.label());
+			alarmBits.add(item);
+		}
+		map.add("alarmBits", alarmBits);
+		return map;
 	}
 
 	private static String requiredString(JsonObject params, String name) {

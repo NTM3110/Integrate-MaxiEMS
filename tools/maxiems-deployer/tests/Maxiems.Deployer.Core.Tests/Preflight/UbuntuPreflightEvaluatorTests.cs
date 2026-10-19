@@ -54,7 +54,7 @@ public sealed class UbuntuPreflightEvaluatorTests
     }
 
     [TestMethod]
-    public void ResourceClockAndSudoFailuresAreReportedBeforeMutation()
+    public void ClockSkewWarnsWhileResourceAndSudoFailuresStillBlock()
     {
         var result = UbuntuPreflightEvaluator.Evaluate(Valid() with
         {
@@ -65,8 +65,37 @@ public sealed class UbuntuPreflightEvaluatorTests
             NonInteractiveSudoAvailable = false,
         }, Now);
 
-        Assert.AreEqual(4, result.Issues.Length);
+        Assert.IsFalse(result.IsSupported);
+        Assert.AreEqual(3, result.Issues.Length);
+        Assert.AreEqual(PreflightIssueCode.ClockSkew, result.Warnings.Single().Code);
         Assert.IsTrue(result.Issues.Any(issue => issue.Code == PreflightIssueCode.NonInteractiveSudoUnavailable));
+    }
+
+    [TestMethod]
+    [DataRow(-6)]
+    [DataRow(6)]
+    public void ClockSkewAloneWarnsWithoutBlockingDeployment(int minutes)
+    {
+        var result = UbuntuPreflightEvaluator.Evaluate(Valid() with
+        {
+            RemoteTime = Now.AddMinutes(minutes)
+        }, Now);
+
+        Assert.IsTrue(result.IsSupported);
+        Assert.IsEmpty(result.Issues);
+        Assert.AreEqual(PreflightIssueCode.ClockSkew, result.Warnings.Single().Code);
+    }
+
+    [TestMethod]
+    public void ClockSkewAtThresholdDoesNotWarn()
+    {
+        var result = UbuntuPreflightEvaluator.Evaluate(Valid() with
+        {
+            RemoteTime = Now.Add(UbuntuPreflightEvaluator.MaximumClockSkew)
+        }, Now);
+
+        Assert.IsTrue(result.IsSupported);
+        Assert.IsEmpty(result.Warnings);
     }
 
     [TestMethod]

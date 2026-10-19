@@ -2,7 +2,8 @@ Defaults:maxiems-deploy secure_path=/usr/sbin:/usr/bin:/sbin:/bin
 Defaults:openems secure_path=/usr/sbin:/usr/bin:/sbin:/bin
 
 Cmnd_Alias MAXIEMS_DEPLOY = /usr/local/libexec/maxiems-deploy-helper install-prerequisites, \
- /usr/local/libexec/maxiems-deploy-helper runtime-config, \
+ /usr/local/libexec/maxiems-deploy-helper runtime-config managed, \
+ /usr/local/libexec/maxiems-deploy-helper runtime-config preserve, \
  /usr/local/libexec/maxiems-deploy-helper bms-setup real, \
  /usr/local/libexec/maxiems-deploy-helper bms-setup demo, \
  /usr/local/libexec/maxiems-deploy-helper bms-ready, \
@@ -39,5 +40,12 @@ Cmnd_Alias MAXIEMS_BMS = /usr/local/sbin/maxiems-time-helper status, \
  /usr/local/sbin/maxiems-wifi status, \
  /usr/local/sbin/maxiems-wifi scan, \
  /usr/local/sbin/maxiems-wifi connect *, \
- /usr/local/sbin/maxiems-netcfg *
+ /usr/local/sbin/maxiems-netcfg *, \
+ /usr/local/sbin/maxiems-gpio status, \
+ /usr/local/sbin/maxiems-gpio save, \
+ /usr/local/sbin/maxiems-gpio switch, \
+ /usr/local/sbin/maxiems-gpio drive, \
+ /usr/local/sbin/maxiems-keyboard normal, \
+ /usr/local/sbin/maxiems-keyboard dialer, \
+ /usr/local/sbin/maxiems-keyboard hide
 openems ALL=(root) NOPASSWD: MAXIEMS_BMS

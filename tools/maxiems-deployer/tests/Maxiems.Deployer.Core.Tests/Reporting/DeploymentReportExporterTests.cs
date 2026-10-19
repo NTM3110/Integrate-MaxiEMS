@@ -61,6 +61,8 @@ public sealed class DeploymentReportExporterTests
                         new("openemsPassword", password, false),
                         new("tailscaleUrl", tailscaleUrl, false),
                     ]),
+                new(started, DeploymentLogLevel.Warning, "preflight.ClockSkew",
+                    "ClockSkew: target time differs by more than five minutes", []),
             ])
         {
             ReleaseId = new("20260719010000-0123456789ab"),
@@ -91,6 +93,8 @@ public sealed class DeploymentReportExporterTests
         StringAssert.Contains(json, "[REDACTED]");
         StringAssert.Contains(html, "<!doctype html>");
         StringAssert.Contains(html, "deploymentId");
+        StringAssert.Contains(html, "Preflight warnings");
+        StringAssert.Contains(html, "ClockSkew: target time differs by more than five minutes");
         Assert.IsFalse(html.Contains("<script", StringComparison.OrdinalIgnoreCase));
         foreach (var secret in new[] { privateKey, passphrase, password, authorization, tailscaleUrl })
         {

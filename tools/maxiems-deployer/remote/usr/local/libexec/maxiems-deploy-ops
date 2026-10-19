@@ -188,6 +188,16 @@ snapshot_service() {
 	fi
 }
 
+kiosk_user_systemctl() {
+	local user_id
+	user_id="$(/usr/bin/id -u admin 2>/dev/null)" || return 1
+	[[ -S "/run/user/$user_id/bus" ]] || return 1
+	/usr/sbin/runuser -u admin -- /usr/bin/env \
+		"XDG_RUNTIME_DIR=/run/user/$user_id" \
+		"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$user_id/bus" \
+		/usr/bin/systemctl --user "$@"
+}
+
 begin_transaction() {
 	local release_id="$1"
 	local transaction
@@ -220,12 +230,49 @@ begin_transaction() {
 		die 'current release path is not a symbolic link'
 	fi
 	snapshot_path "$transaction" 'edge-unit' '/etc/systemd/system/maxiems-edge.service'
+	snapshot_path "$transaction" 'gpio-mode-unit' '/etc/systemd/system/maxiems-gpio-mode.service'
+	snapshot_path "$transaction" 'kiosk-unit' '/etc/systemd/system/maxiems-kiosk.service'
+	snapshot_path "$transaction" 'kiosk-user-unit' '/etc/systemd/user/maxiems-kiosk.service'
+	snapshot_path "$transaction" 'kiosk-user-enabled-link' \
+		'/home/admin/.config/systemd/user/default.target.wants/maxiems-kiosk.service'
+	snapshot_path "$transaction" 'kiosk-autostart' '/etc/xdg/autostart/maxiems-kiosk.desktop'
+	snapshot_path "$transaction" 'kiosk-sway-config' '/home/admin/.config/sway/config'
+	snapshot_path "$transaction" 'kiosk-sway-include' '/home/admin/.config/sway/config.d/maxiems-kiosk.conf'
+	snapshot_path "$transaction" 'kiosk-getty-dropin' \
+		'/etc/systemd/system/getty@tty1.service.d/90-maxiems-kiosk-autologin.conf'
+	snapshot_path "$transaction" 'kiosk-profile-launcher' '/etc/profile.d/90-maxiems-kiosk-sway.sh'
+	/usr/bin/touch -- "$transaction/kiosk-admin-openems-membership-snapshotted"
+	if /usr/bin/id -nG admin 2>/dev/null | /usr/bin/tr ' ' '\n' | \
+		/usr/bin/grep -Fqx openems; then
+		/usr/bin/touch -- "$transaction/kiosk-admin-was-openems-member"
+	fi
+	if [[ ! -e /var/lib/maxiems/kbd && ! -L /var/lib/maxiems/kbd ]]; then
+		/usr/bin/touch -- "$transaction/kiosk-kbd-was-absent"
+	fi
+	snapshot_path "$transaction" 'legacy-firefox-autostart' '/home/admin/.config/autostart/open-firefox.desktop'
+	if [[ -e /etc/systemd/user/maxiems-kiosk.service \
+		|| -L /home/admin/.config/systemd/user/default.target.wants/maxiems-kiosk.service ]] \
+		&& { kiosk_user_systemctl is-active --quiet maxiems-kiosk.service \
+			|| /usr/bin/pgrep --uid admin --full \
+				'^/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor$' \
+				>/dev/null 2>&1; }; then
+		/usr/bin/touch -- "$transaction/kiosk-was-active"
+	fi
 	snapshot_path "$transaction" 'nginx-site' '/etc/nginx/sites-available/maxiems'
 	snapshot_path "$transaction" 'nginx-enabled' '/etc/nginx/sites-enabled/maxiems'
 	snapshot_path "$transaction" 'nginx-default' '/etc/nginx/sites-enabled/default'
 	snapshot_path "$transaction" 'legacy-nginx-maxicom' '/etc/nginx/sites-enabled/maxicom'
 	snapshot_path "$transaction" 'managed-websocket-config' "$MANAGED_WEBSOCKET_CONFIG"
+	for index in 0 1 2; do
+		snapshot_path "$transaction" "legacy-bms-serial-$index" \
+			"/var/lib/maxiems/shared/config/Bridge/Modbus/Serial/maxiems-modbus${index}.config"
+		snapshot_path "$transaction" "batch-bms-serial-$index" \
+			"/var/lib/maxiems/shared/config/Bridge/BmsModbus/Serial/maxiems-modbus${index}.config"
+	done
 	snapshot_service "$transaction" 'maxiems-edge.service'
+	snapshot_service "$transaction" 'maxiems-gpio-mode.service'
+	snapshot_service "$transaction" 'maxiems-kiosk.service'
+	snapshot_service "$transaction" 'getty@tty1.service'
 	snapshot_service "$transaction" 'nginx.service'
 	local config='/var/lib/maxiems/shared/config'
 	if [[ ! -e "$config" ]]; then
@@ -381,12 +428,20 @@ stage_release() {
 	/usr/bin/sort -u -o "$expected_files" "$expected_files"
 	/usr/bin/find "$staging" -type f -printf '%P\n' | /usr/bin/sort -u > "$transaction/actual-files"
 	/usr/bin/cmp --silent "$expected_files" "$transaction/actual-files" || die 'payload file inventory mismatch'
+	# Derive operator-facing release identity only after the archive inventory is verified.
+	# Keeping this file outside the canonical payload inventory avoids a hash cycle:
+	# releaseId includes payloadHash, while payloadHash identifies the ZIP file inventory.
+	/usr/bin/jq -r '"releaseId=\(.releaseId)\nbuildTimestampUtc=\(.buildTimestampUtc)\ngitRevision=\(.gitRevision)\npayloadHash=\(.payloadHash)"' \
+		"$staging/manifest.json" > "$staging/release.txt"
+	/usr/bin/printf 'release.txt\n' >> "$expected_files"
 	while IFS= read -r path; do
 		/usr/bin/sync -f -- "$staging/$path"
 	done < "$expected_files"
 	/usr/bin/chown -R root:root -- "$staging"
 	/usr/bin/find "$staging" -type d -exec /usr/bin/chmod 0555 -- {} +
 	/usr/bin/find "$staging" -type f -exec /usr/bin/chmod 0444 -- {} +
+	/usr/bin/chmod 0555 -- "$staging/helpers/maxiems-keyboard-controller" \
+		"$staging/helpers/wvkbd-mobintl"
 	/usr/bin/mv -T -- "$staging" "$destination"
 	/usr/bin/sync -f -- "$MAXIEMS_RELEASES"
 	/usr/bin/touch -- "$transaction/release-created"
@@ -431,11 +486,38 @@ restore_service() {
 	fi
 }
 
+restore_tty1_service() {
+	local transaction="$1"
+	if [[ "$(<"$transaction/getty@tty1.service.enabled")" == 'enabled' ]]; then
+		/usr/bin/systemctl enable getty@tty1.service
+	else
+		/usr/bin/systemctl disable getty@tty1.service >/dev/null 2>&1 || true
+	fi
+	if [[ "$(<"$transaction/getty@tty1.service.active")" == 'active' ]]; then
+		if /usr/bin/who | /usr/bin/awk '$2 == "tty1" { found=1 } END { exit found ? 0 : 1 }'; then
+			# daemon-reload applies the restored definition to the next getty start.
+			# Do not terminate an operator who is currently using physical tty1.
+			/usr/bin/printf '%s\n' \
+				'tty1 is in use; restored getty settings apply after logout or reboot'
+		else
+			/usr/bin/systemctl restart getty@tty1.service
+		fi
+	else
+		/usr/bin/systemctl stop getty@tty1.service >/dev/null 2>&1 || true
+	fi
+}
+
 abort_transaction() {
 	local release_id="$1"
 	active_transaction_is "$release_id" || die 'deployment transaction is not active'
 	local transaction
 	transaction="$(transaction_dir "$release_id")"
+	local kiosk_managed=false
+	[[ -f "$transaction/kiosk-managed" ]] && kiosk_managed=true
+	if [[ "$kiosk_managed" == true ]]; then
+		/usr/bin/systemctl stop maxiems-kiosk.service >/dev/null 2>&1 || true
+		kiosk_user_systemctl stop maxiems-kiosk.service >/dev/null 2>&1 || true
+	fi
 	/usr/bin/systemctl stop maxiems-edge.service >/dev/null 2>&1 || true
 	if [[ -f "$transaction/previous-release" ]]; then
 		local previous
@@ -447,6 +529,29 @@ abort_transaction() {
 		/usr/bin/rm -f -- "${MAXIEMS_ROOT}/current"
 	fi
 	restore_path "$transaction" 'edge-unit' '/etc/systemd/system/maxiems-edge.service'
+	restore_path "$transaction" 'gpio-mode-unit' '/etc/systemd/system/maxiems-gpio-mode.service'
+	if [[ "$kiosk_managed" == true ]]; then
+		restore_path "$transaction" 'kiosk-unit' '/etc/systemd/system/maxiems-kiosk.service'
+		restore_path "$transaction" 'kiosk-user-unit' '/etc/systemd/user/maxiems-kiosk.service'
+		restore_path "$transaction" 'kiosk-user-enabled-link' \
+			'/home/admin/.config/systemd/user/default.target.wants/maxiems-kiosk.service'
+		restore_path "$transaction" 'kiosk-autostart' '/etc/xdg/autostart/maxiems-kiosk.desktop'
+		restore_path "$transaction" 'kiosk-sway-config' '/home/admin/.config/sway/config'
+		restore_path "$transaction" 'kiosk-sway-include' '/home/admin/.config/sway/config.d/maxiems-kiosk.conf'
+		restore_path "$transaction" 'kiosk-getty-dropin' \
+			'/etc/systemd/system/getty@tty1.service.d/90-maxiems-kiosk-autologin.conf'
+		restore_path "$transaction" 'kiosk-profile-launcher' '/etc/profile.d/90-maxiems-kiosk-sway.sh'
+		if [[ -f "$transaction/kiosk-kbd-was-absent" ]]; then
+			/usr/bin/rm -rf -- /var/lib/maxiems/kbd
+		fi
+		if [[ -f "$transaction/kiosk-admin-openems-membership-snapshotted" && \
+			! -f "$transaction/kiosk-admin-was-openems-member" ]] && \
+			/usr/bin/id -nG admin 2>/dev/null | /usr/bin/tr ' ' '\n' | \
+			/usr/bin/grep -Fqx openems; then
+			/usr/bin/gpasswd --delete admin openems >/dev/null
+		fi
+		restore_path "$transaction" 'legacy-firefox-autostart' '/home/admin/.config/autostart/open-firefox.desktop'
+	fi
 	restore_path "$transaction" 'nginx-site' '/etc/nginx/sites-available/maxiems'
 	restore_path "$transaction" 'nginx-enabled' '/etc/nginx/sites-enabled/maxiems'
 	restore_path "$transaction" 'nginx-default' '/etc/nginx/sites-enabled/default'
@@ -454,15 +559,30 @@ abort_transaction() {
 		restore_path "$transaction" 'legacy-nginx-maxicom' '/etc/nginx/sites-enabled/maxicom'
 	fi
 	/usr/bin/systemctl daemon-reload
+	if [[ "$kiosk_managed" == true ]]; then
+		restore_service "$transaction" 'maxiems-kiosk.service'
+		restore_tty1_service "$transaction"
+		kiosk_user_systemctl daemon-reload >/dev/null 2>&1 || true
+		if [[ -f "$transaction/kiosk-was-active" ]]; then
+			kiosk_user_systemctl start maxiems-kiosk.service || true
+		fi
+	fi
 	if [[ -f "$transaction/bootstrap-created" ]]; then
 		/usr/bin/rm -rf -- /var/lib/maxiems/shared/config
 	fi
 	restore_path "$transaction" 'managed-websocket-config' "$MANAGED_WEBSOCKET_CONFIG"
+	for index in 0 1 2; do
+		restore_path "$transaction" "legacy-bms-serial-$index" \
+			"/var/lib/maxiems/shared/config/Bridge/Modbus/Serial/maxiems-modbus${index}.config"
+		restore_path "$transaction" "batch-bms-serial-$index" \
+			"/var/lib/maxiems/shared/config/Bridge/BmsModbus/Serial/maxiems-modbus${index}.config"
+	done
 	if [[ -f "$transaction/release-created" ]]; then
 		/usr/bin/rm -rf -- "${MAXIEMS_RELEASES}/${release_id:?}"
 	fi
 	/usr/bin/rm -rf -- "${MAXIEMS_RELEASES}/.staging-${release_id:?}"
 	restore_service "$transaction" 'nginx.service'
+	restore_service "$transaction" 'maxiems-gpio-mode.service'
 	restore_service "$transaction" 'maxiems-edge.service'
 	if [[ -f "$transaction/legacy-openems.present" ]]; then
 		restore_service "$transaction" 'openems.service'
@@ -557,13 +677,21 @@ verify_status() {
 		actual="$(/usr/bin/sha256sum -- "$current/$path")"
 		[[ "${actual%% *}" == "$expected" ]] || die 'installed release hash mismatch'
 	done < <(/usr/bin/jq -r '.files[] | [.sha256, .path] | @tsv' "$current/manifest.json")
+	if [[ -e "$current/release.txt" || -L "$current/release.txt" ]]; then
+		require_regular_no_symlink "$current/release.txt"
+		/usr/bin/cmp --silent "$current/release.txt" \
+			<(/usr/bin/jq -r '"releaseId=\(.releaseId)\nbuildTimestampUtc=\(.buildTimestampUtc)\ngitRevision=\(.gitRevision)\npayloadHash=\(.payloadHash)"' "$current/manifest.json") \
+			|| die 'installed release identity mismatch'
+	fi
 	if [[ "$(/usr/bin/systemctl show --property=LoadState --value openems.service)" == 'loaded' ]]; then
 		! /usr/bin/systemctl is-active --quiet openems.service || die 'legacy OpenEMS service is still active'
 		! /usr/bin/systemctl is-enabled --quiet openems.service || die 'legacy OpenEMS service is still enabled'
 	fi
 	local port listeners port_listeners
 	listeners="$(/usr/bin/ss -H -lnt)"
-	for port in 8084 502; do
+	# The BMS Modbus Server owns its configured bind address, including public :502.
+	# Only the management JSON-RPC port is required to stay on loopback.
+	for port in 8084; do
 		port_listeners="$(listeners_for_port "$port" "$listeners")"
 		[[ -z "$port_listeners" ]] && continue
 		if /usr/bin/awk '{print $4}' <<< "$port_listeners" | /usr/bin/grep -Eqv '^(127\.0\.0\.1|\[::ffff:127\.0\.0\.1\]|\[::1\]):[0-9]+$'; then
@@ -608,6 +736,9 @@ case "$1" in
 	install-prerequisites) install_prerequisites ;;
 	runtime-config)
 		/usr/local/libexec/maxiems-runtime-config-ops
+		if [[ "$2" == 'managed' ]]; then
+			/usr/local/libexec/maxiems-kiosk-ops
+		fi
 		migrate_managed_websocket
 		;;
 	bms-setup) /usr/local/libexec/maxiems-bms-setup setup "$2" ;;

@@ -30,6 +30,15 @@ internal static class DeploymentReportHtmlRenderer
         }
         if (root.TryGetProperty("phases", out var phases))
             ArrayTable(body, "Deployment phases", phases);
+        if (root.TryGetProperty("logs", out var logs) && logs.ValueKind == JsonValueKind.Array)
+        {
+            var warnings = logs.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object
+                && item.TryGetProperty("level", out var level) && level.GetString() == "warning"
+                && item.TryGetProperty("eventCode", out var code)
+                && code.GetString()?.StartsWith("preflight.", StringComparison.Ordinal) == true).ToArray();
+            if (warnings.Length > 0)
+                ArrayTable(body, "Preflight warnings", warnings);
+        }
         if (root.TryGetProperty("checks", out var checks))
             ArrayTable(body, "Automated acceptance", checks);
         if (root.TryGetProperty("rollback", out var rollback) && rollback.ValueKind == JsonValueKind.Object)
@@ -62,7 +71,10 @@ internal static class DeploymentReportHtmlRenderer
     {
         if (array.ValueKind != JsonValueKind.Array)
             return;
-        var rows = array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object).ToArray();
+        ArrayTable(html, title, array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object).ToArray());
+    }
+    private static void ArrayTable(StringBuilder html, string title, IReadOnlyList<JsonElement> rows)
+    {
         var columns = rows.SelectMany(row => row.EnumerateObject().Select(property => property.Name))
             .Distinct(StringComparer.Ordinal).ToArray();
         html.Append("<section><h2>").Append(Encode(title)).Append("</h2><table><thead><tr>");

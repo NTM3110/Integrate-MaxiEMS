@@ -9,6 +9,7 @@ public interface BmsSerialBridgeService {
 
 	List<SerialBridge> list() throws Exception;
 
-	SerialBridge update(String id, String alias, int baudRate, int databits, String parity, String stopbits)
+	SerialBridge update(String id, String alias, int baudRate, int databits, String parity, String stopbits,
+			Integer responseTimeoutMs)
 			throws Exception;
 }

@@ -19,7 +19,10 @@ internal sealed class DeploymentRunBuilder(
     private readonly List<DeploymentCheckEvidence> checks = [];
     private readonly Dictionary<string, string> versions = new(StringComparer.Ordinal);
     private readonly DateTimeOffset startedAt = (timeProvider ?? TimeProvider.System).GetUtcNow();
-    public DeploymentPhase? LastFailedPhase { get; private set; }
+    public DeploymentPhase? LastFailedPhase
+    {
+        get; private set;
+    }
 
     public async Task<T> PhaseAsync<T>(DeploymentPhase phase, Func<Task<T>> action, string? message = null)
     {
@@ -58,6 +61,13 @@ internal sealed class DeploymentRunBuilder(
         this.checks.Add(new(code, passed, redactor.RedactFreeText(summary)));
 
     public void AddVersion(string name, string value) => this.versions[name] = value;
+
+    public void Warning(DeploymentPhase phase, string code, string message)
+    {
+        var safe = redactor.RedactFreeText(message);
+        this.logs.Add(this.Log(phase, code, safe, DeploymentLogLevel.Warning));
+        progress?.Invoke(new(phase, DeploymentPhaseOutcome.Running, this.clock.GetUtcNow(), "WARNING: " + safe));
+    }
 
     public void TailscaleUri(DeploymentPhase phase, Uri uri) =>
         progress?.Invoke(new(phase, DeploymentPhaseOutcome.Running, this.clock.GetUtcNow(),

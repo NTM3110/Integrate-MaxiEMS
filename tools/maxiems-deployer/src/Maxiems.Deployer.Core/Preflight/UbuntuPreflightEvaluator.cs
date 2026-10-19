@@ -25,6 +25,7 @@ public sealed class UbuntuPreflightEvaluator
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var issues = ImmutableArray.CreateBuilder<PreflightIssue>();
+        var warnings = ImmutableArray.CreateBuilder<PreflightIssue>();
         if (!snapshot.OperatingSystemId.Equals("ubuntu", StringComparison.OrdinalIgnoreCase))
         {
             issues.Add(new(PreflightIssueCode.UnsupportedOperatingSystem, snapshot.OperatingSystemId));
@@ -50,7 +51,7 @@ public sealed class UbuntuPreflightEvaluator
         }
         if ((snapshot.RemoteTime - localTime).Duration() > MaximumClockSkew)
         {
-            issues.Add(new(PreflightIssueCode.ClockSkew, snapshot.RemoteTime.ToString("O")));
+            warnings.Add(new(PreflightIssueCode.ClockSkew, snapshot.RemoteTime.ToString("O")));
         }
         if (!snapshot.NonInteractiveSudoAvailable)
         {
@@ -70,7 +71,10 @@ public sealed class UbuntuPreflightEvaluator
         }
         EvaluateAccount(snapshot.ExistingAccounts, "maxiems-deploy", "/var/lib/maxiems-deploy", "/bin/bash", issues);
         EvaluateAccount(snapshot.ExistingAccounts, "openems", "/var/lib/openems", "/usr/sbin/nologin", issues);
-        return new(issues.Count == 0, architecture, issues.ToImmutable());
+        return new(issues.Count == 0, architecture, issues.ToImmutable())
+        {
+            Warnings = warnings.ToImmutable()
+        };
     }
 
     private static SupportedArchitecture? ParseArchitecture(string value) => value switch

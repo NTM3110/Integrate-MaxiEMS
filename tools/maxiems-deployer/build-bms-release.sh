@@ -21,7 +21,12 @@ fi
 "$here/publish-linux.sh" "$output"
 python3 "$here/build-bms-payload.py" "${backend_args[@]}" --ui-dist "$ui" \
     --packages "$packages" --architecture "$arch" --output "$output/payload.zip"
+jq -r '"releaseId=\(.releaseId)\nbuildTimestampUtc=\(.buildTimestampUtc)\ngitRevision=\(.gitRevision)\npayloadHash=\(.payloadHash)"' \
+    "$output/payload.zip.manifest.json" > "$output/release.txt"
 cp -- "$here/BMS_DEPLOY.md" "$output/"
+/usr/bin/install --mode=0755 -- "$here/release/install.sh" "$output/install.sh"
+/usr/bin/install --mode=0755 -- "$here/remote/usr/local/libexec/maxiems-bootstrap-helper" \
+    "$output/maxiems-local-bootstrap-helper"
 (
     cd -- "$output"
     payload_hash=$(jq -er '.payloadHash | select(test("^[0-9a-f]{64}$"))' payload.zip.manifest.json)

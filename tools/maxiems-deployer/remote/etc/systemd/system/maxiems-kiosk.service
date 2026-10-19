@@ -1,0 +1,20 @@
+[Unit]
+Description=MAXiEMS BMS Chromium kiosk
+After=nginx.service
+Wants=nginx.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+Environment=HOME=/home/admin
+WorkingDirectory=/home/admin
+ExecStart=/usr/bin/python3 /opt/maxiems/current/remote/usr/local/libexec/maxiems-kiosk-supervisor
+Restart=on-failure
+RestartSec=3
+# Do not set NoNewPrivileges: Snap Chromium needs its launcher/user-namespace
+# privilege transition. The browser still runs as the unprivileged admin user.
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""Root-owned BMS GPIO alarm and UART3 mode helper."""
+import datetime
+import fcntl
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+CONFIG = Path('/etc/maxiems/gpio-alarm.json')
+GPIO = Path('/sys/class/gpio')
+DRIVER = Path('/sys/bus/platform/drivers/dw-apb-uart')
+DEVICE = 'fe670000.serial'
+TTY = Path('/dev/ttyS3')
+LOCK = Path('/run/lock/maxiems-gpio.lock')
+OUTPUT_STATE = Path('/run/maxiems-gpio-output.json')
+PINS = {'1': (0, 33), '2': (1, 32)}
+DEFAULTS = {'1': {'alarmValue': 1, 'direction': 'output'},
+            '2': {'alarmValue': 1, 'direction': 'output'}}
+
+
+def read(path):
+    try:
+        return path.read_text(encoding='ascii').strip()
+    except OSError:
+        return None
+
+
+def write(path, value):
+    path.write_text(str(value), encoding='ascii')
+
+
+def load_config():
+    try:
+        raw = json.loads(CONFIG.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError('Invalid GPIO configuration')
+    strings = {key: dict(value) for key, value in DEFAULTS.items()}
+    old = raw.get('strings', {})
+    if isinstance(old, dict):
+        for key in strings:
+            candidate = old.get(key)
+            if isinstance(candidate, dict):
+                if type(candidate.get('alarmValue')) is int and candidate['alarmValue'] in (0, 1):
+                    strings[key]['alarmValue'] = candidate['alarmValue']
+                # Alarm pins are outputs. Older input configurations migrate on
+                # the next GPIO application without changing the polarity.
+                strings[key]['direction'] = 'output'
+    mode = raw.get('mode')
+    if mode not in (None, 'GPIO', 'UART3'):
+        raise ValueError('Invalid saved GPIO/UART3 mode')
+    return strings, mode
+
+
+def save_config(strings, mode):
+    CONFIG.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.gpio-alarm.', dir=CONFIG.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as target:
+            json.dump({'mode': mode, 'strings': strings}, target, separators=(',', ':'))
+            target.write('\n')
+            target.flush()
+            os.fsync(target.fileno())
+        os.chmod(temporary, 0o640)
+        os.replace(temporary, CONFIG)
+        directory_fd = os.open(CONFIG.parent, os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def output_state():
+    try:
+        data = json.loads(OUTPUT_STATE.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_output_state(data):
+    OUTPUT_STATE.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.gpio-output.', dir=OUTPUT_STATE.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as target:
+            json.dump(data, target, separators=(',', ':'))
+            target.flush()
+            os.fsync(target.fileno())
+        os.chmod(temporary, 0o640)
+        os.replace(temporary, OUTPUT_STATE)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def invalidate_output_state():
+    OUTPUT_STATE.unlink(missing_ok=True)
+
+
+def gpio_base(pin):
+    return GPIO / ('gpio' + str(pin))
+
+
+def uart_bound():
+    return (DRIVER / DEVICE).exists()
+
+
+def detect_mode():
+    exported = all(gpio_base(pin).is_dir() for _, pin in PINS.values())
+    if uart_bound():
+        return 'UART3' if TTY.exists() and not exported else 'UNKNOWN'
+    return 'GPIO' if exported else 'UNKNOWN'
+
+
+def process_users(path):
+    """Find live processes by device identity, without exposing argv or environment."""
+    try:
+        device = path.stat()
+    except FileNotFoundError:
+        return []
+    found = []
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            for fd in (proc / 'fd').iterdir():
+                try:
+                    opened = fd.stat()
+                except OSError:
+                    continue
+                if opened.st_rdev != device.st_rdev or opened.st_ino != device.st_ino:
+                    continue
+                uid = (proc / 'status').stat().st_uid
+                try:
+                    user = pwd.getpwuid(uid).pw_name
+                except KeyError:
+                    user = str(uid)
+                found.append({'resource': str(path), 'pid': int(proc.name),
+                              'processName': read(proc / 'comm') or 'unknown', 'user': user})
+                break
+        except OSError:
+            continue
+    return found[:16]
+
+
+def gpio_consumers():
+    """Report non-sysfs consumers when gpioinfo is available."""
+    try:
+        output = subprocess.run(['/usr/bin/gpioinfo', 'gpiochip1'], capture_output=True,
+                                text=True, timeout=3, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    result = []
+    for line_number, pin in ((1, 33), (0, 32)):
+        for line in output.splitlines():
+            if not re.match(r'^\s*line\s+' + str(line_number) + r':', line):
+                continue
+            if 'used' not in line.lower():
+                break
+            if 'sysfs' in line.lower() or 'uart' in line.lower():
+                break
+            owners = process_users(Path('/dev/gpiochip1'))
+            if owners:
+                result.extend(owners)
+                break
+            result.append({'resource': 'gpiochip1 line ' + str(line_number) + ' (GPIO' + str(pin) + ')',
+                           'pid': None, 'processName': line.strip()[:120], 'user': None})
+            break
+    return result[:16]
+
+
+def state(strings, requested=None, changed=False, error=None, busy=None, rollback=None):
+    mode = detect_mode()
+    known_outputs = output_state() if mode == 'GPIO' else {}
+    outputs = {}
+    gpio_matches = True
+    for key, (io, pin) in PINS.items():
+        setting = strings[key]
+        base = gpio_base(pin)
+        value = read(base / 'value')
+        direction = read(base / 'direction')
+        if mode == 'GPIO':
+            expected_direction = 'out'
+            gpio_matches = gpio_matches and direction == expected_direction and read(base / 'active_low') == '0'
+        known = known_outputs.get(key)
+        active = known.get('alarm') if isinstance(known, dict) else None
+        desired = setting['alarmValue'] if active is True else 1 - setting['alarmValue'] if active is False else None
+        synchronized = mode == 'GPIO' and desired is not None and value == str(desired)
+        outputs[key] = {
+            'stringIndex': int(key), 'ioIndex': io, 'gpioNumber': pin,
+            'alarmValue': setting['alarmValue'], 'normalValue': 1 - setting['alarmValue'],
+            'direction': 'output', 'alarm': active,
+            'synchronized': synchronized,
+            'alarmChannelId': 'str' + key + '_string_alarm',
+            'desiredValue': desired,
+            'lastWrittenValue': int(value) if value in ('0', '1') else None,
+            'lastDirection': direction,
+            'lastError': None if synchronized else 'Alarm output is not synchronized',
+        }
+    uart_speed = baud_rate() if uart_bound() and TTY.exists() else None
+    confirmed = (error is None and mode != 'UNKNOWN' and (requested is None or requested == mode)
+                 and (mode != 'GPIO' or gpio_matches)
+                 and (mode != 'UART3' or uart_speed == 9600))
+    return {
+        'scriptPath': '/usr/local/sbin/maxiems-gpio', 'strings': outputs,
+        'requestedMode': requested, 'activeMode': mode, 'confirmed': confirmed,
+        'changed': changed, 'checkedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'gpio': {'io0': {'number': 33, 'exported': gpio_base(33).is_dir()},
+                 'io1': {'number': 32, 'exported': gpio_base(32).is_dir()}},
+        'uart': {'device': str(TTY), 'driverBound': uart_bound(), 'baudRate': uart_speed},
+        'errorCode': error[0] if error else None, 'message': error[1] if error else None,
+        'busyResources': busy or [], 'rollbackConfirmed': rollback,
+    }
+
+
+def baud_rate():
+    try:
+        result = subprocess.run(['/usr/bin/stty', '-F', str(TTY), 'speed'], capture_output=True,
+                                text=True, timeout=3, check=True)
+        return int(result.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def set_gpio(strings):
+    if uart_bound():
+        write(DRIVER / 'unbind', DEVICE)
+    for _, pin in PINS.values():
+        base = gpio_base(pin)
+        if not base.is_dir():
+            write(GPIO / 'export', pin)
+        write(base / 'active_low', 0)
+    for key, (_, pin) in PINS.items():
+        setting = strings[key]
+        base = gpio_base(pin)
+        # An already exported output can be carrying an active alarm. Keep its
+        # electrical level until the committed alarm state is reconciled.
+        if read(base / 'direction') != 'out':
+            # Without authoritative alarm state, choose the alarm level. The
+            # alarm worker reconciles it after reading its durable checkpoint.
+            write(base / 'direction', 'high' if setting['alarmValue'] else 'low')
+
+
+def set_uart():
+    for _, pin in PINS.values():
+        if gpio_base(pin).is_dir():
+            write(GPIO / 'unexport', pin)
+    if not uart_bound():
+        write(DRIVER / 'bind', DEVICE)
+    for _ in range(20):
+        if TTY.exists():
+            break
+        time.sleep(0.1)
+    if not TTY.exists():
+        raise RuntimeError('/dev/ttyS3 did not appear after binding UART3')
+    fd = os.open(TTY, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        fcntl.ioctl(fd, getattr(termios, 'TIOCCBRK', 0x5428))
+    finally:
+        os.close(fd)
+    subprocess.run(['/usr/bin/stty', '-F', str(TTY), '9600', 'raw', '-echo', 'cs8',
+                    '-cstopb', '-parenb', '-ixon', '-ixoff', '-crtscts'],
+                   timeout=5, check=True, capture_output=True)
+
+
+def switch(strings, requested, persist=True):
+    previous = detect_mode()
+    if requested == previous:
+        result = state(strings, requested)
+        if result['confirmed']:
+            if persist:
+                save_config(strings, requested)
+            return result
+    if previous == 'UNKNOWN' and not persist:
+        return state(strings, requested, error=('HARDWARE_UNAVAILABLE', 'Current pin mode is unknown'))
+    busy = process_users(TTY)
+    if requested == 'UART3':
+        # A chip fd can own one of the shared lines even when gpioinfo is not
+        # installed. Conservatively block rather than unbind a live consumer.
+        busy.extend(process_users(Path('/dev/gpiochip1')))
+        busy.extend(gpio_consumers())
+    if busy:
+        return state(strings, requested, error=('RESOURCE_BUSY', 'UART3/GPIO resources are in use'), busy=busy)
+    try:
+        if requested == 'GPIO':
+            set_gpio(strings)
+        else:
+            set_uart()
+        result = state(strings, requested, changed=True)
+        if not result['confirmed'] or (requested == 'UART3' and result['uart']['baudRate'] != 9600):
+            raise RuntimeError('Hardware readback did not confirm ' + requested)
+        if persist:
+            save_config(strings, requested)
+        invalidate_output_state()
+        return result
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        restored = False
+        if previous != 'UNKNOWN':
+            try:
+                if previous == 'GPIO':
+                    set_gpio(strings)
+                else:
+                    set_uart()
+                restored = state(strings, previous)['confirmed']
+            except (OSError, RuntimeError, subprocess.SubprocessError):
+                pass
+        return state(strings, requested, error=('SWITCH_FAILED', str(exc)[:200]), rollback=restored)
+
+
+def run(action, request):
+    strings, saved_mode = load_config()
+    if action == 'status':
+        return state(strings)
+    if action == 'apply':
+        if saved_mode is None:
+            return state(strings)
+        result = switch(strings, saved_mode, persist=False)
+        if result['errorCode'] is not None or saved_mode != 'GPIO':
+            return result
+        # /run is cleared on boot. Until the alarm worker reads its durable
+        # state, an existing exported output must not look falsely normal.
+        invalidate_output_state()
+        for key, (_, pin) in PINS.items():
+            base = gpio_base(pin)
+            desired = strings[key]['alarmValue']
+            if read(base / 'value') != str(desired):
+                write(base / 'value', desired)
+            if read(base / 'value') != str(desired):
+                return state(strings, 'GPIO', error=('READBACK_MISMATCH',
+                                                   'GPIO fail-safe alarm level was not confirmed'))
+        return state(strings, 'GPIO', changed=result['changed'])
+    if action == 'save':
+        if detect_mode() != 'GPIO':
+            return state(strings, 'GPIO', error=('MODE_NOT_GPIO', 'GPIO outputs are not active'))
+        previous_outputs = output_state()
+        validated = {}
+        for key, (_, pin) in PINS.items():
+            old = previous_outputs.get(key)
+            if isinstance(old, dict) and type(old.get('alarm')) is bool:
+                expected = strings[key]['alarmValue'] if old['alarm'] else 1 - strings[key]['alarmValue']
+                if read(gpio_base(pin) / 'value') == str(expected):
+                    validated[key] = old['alarm']
+        for key, field in (('1', 'string1'), ('2', 'string2')):
+            alarm = request.get(field + 'AlarmValue')
+            direction = request.get(field + 'Direction')
+            if type(alarm) is not int or alarm not in (0, 1) or direction != 'output':
+                raise ValueError('Invalid GPIO settings for ' + field)
+            strings[key] = {'alarmValue': alarm, 'direction': direction}
+        set_gpio(strings)
+        for key, alarm in validated.items():
+            desired = strings[key]['alarmValue'] if alarm else 1 - strings[key]['alarmValue']
+            base = gpio_base(PINS[key][1])
+            if read(base / 'value') != str(desired):
+                write(base / 'value', desired)
+            if read(base / 'value') != str(desired):
+                return state(strings, 'GPIO', error=('READBACK_MISMATCH', 'Alarm polarity readback failed'))
+        if not state(strings, 'GPIO')['confirmed']:
+            return state(strings, 'GPIO', error=('READBACK_MISMATCH', 'GPIO mode was not confirmed'))
+        save_config(strings, 'GPIO')
+        # Keep only validated logical output states; unknown state remains
+        # unavailable until the alarm service reconciles its durable state.
+        if validated:
+            save_output_state({key: {'alarm': alarm} for key, alarm in validated.items()})
+        else:
+            invalidate_output_state()
+        return state(strings, 'GPIO', changed=True)
+    if action == 'drive':
+        index = request.get('stringIndex')
+        alarm = request.get('alarm')
+        if type(index) is not int or index not in (1, 2) or type(alarm) is not bool:
+            raise ValueError('drive requires stringIndex 1 or 2 and boolean alarm')
+        if detect_mode() != 'GPIO':
+            return state(strings, 'GPIO', error=('MODE_NOT_GPIO', 'GPIO outputs are not active'))
+        key = str(index)
+        pin = PINS[key][1]
+        base = gpio_base(pin)
+        if read(base / 'direction') != 'out' or read(base / 'active_low') != '0':
+            return state(strings, 'GPIO', error=('READBACK_MISMATCH', 'GPIO output direction/polarity is invalid'))
+        desired = strings[key]['alarmValue'] if alarm else 1 - strings[key]['alarmValue']
+        previous = read(base / 'value')
+        if previous != str(desired):
+            write(base / 'value', desired)
+        if read(base / 'value') != str(desired):
+            return state(strings, 'GPIO', error=('READBACK_MISMATCH', 'GPIO output level was not confirmed'))
+        known = output_state()
+        if known.get(key) != {'alarm': alarm} or previous != str(desired):
+            known[key] = {'alarm': alarm}
+            save_output_state(known)
+        result = state(strings, 'GPIO', changed=previous != str(desired))
+        if not result['confirmed'] or not result['strings'][key]['synchronized']:
+            return state(strings, 'GPIO', error=('READBACK_MISMATCH', 'GPIO output readback failed'))
+        return result
+    if action == 'switch':
+        requested = request.get('mode')
+        if requested not in ('GPIO', 'UART3'):
+            raise ValueError('mode must be GPIO or UART3')
+        return switch(strings, requested)
+    raise ValueError('Unsupported GPIO action')
+
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('status', 'save', 'switch', 'apply', 'drive'):
+        print('Usage: maxiems-gpio status|save|switch|apply|drive (root only)', file=sys.stderr)
+        return 64
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK.open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            request = json.load(sys.stdin) if sys.argv[1] in ('save', 'switch', 'drive') else {}
+            result = run(sys.argv[1], request)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({'confirmed': False, 'errorCode': 'HELPER_ERROR', 'message': str(exc)[:200]}))
+            return 1
+        print(json.dumps(result, separators=(',', ':')))
+        return 0 if result['errorCode'] is None else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

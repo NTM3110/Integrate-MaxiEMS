@@ -12,7 +12,11 @@ case "$operation" in
 	install-prerequisites)
 		require_arg_count 1 "$#"
 		;;
-	runtime-config|bms-ready)
+	runtime-config)
+		require_arg_count 2 "$#"
+		[[ "$2" == 'managed' || "$2" == 'preserve' ]] || die 'invalid kiosk mode'
+		;;
+	bms-ready)
 		require_arg_count 1 "$#"
 		;;
 	bms-setup)

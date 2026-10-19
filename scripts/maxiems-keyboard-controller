@@ -10,12 +10,14 @@ mkfifo -m 0620 "$fifo"
 chgrp openems "$fifo"
 
 keyboard_pid=''
+keyboard_layout=''
 stop_keyboard() {
     if [[ -n "$keyboard_pid" ]] && kill -0 "$keyboard_pid" 2>/dev/null; then
         kill "$keyboard_pid" 2>/dev/null || true
         wait "$keyboard_pid" 2>/dev/null || true
     fi
     keyboard_pid=''
+    keyboard_layout=''
 }
 trap 'stop_keyboard; rm -f "$fifo"' EXIT INT TERM
 
@@ -23,12 +25,20 @@ while true; do
     IFS= read -r action < "$fifo" || continue
     case "$action" in
         normal)
+            if [[ "$keyboard_layout" == normal && -n "$keyboard_pid" ]] && kill -0 "$keyboard_pid" 2>/dev/null; then
+                continue
+            fi
             stop_keyboard
-            "$keyboard" & keyboard_pid=$!
+            "$keyboard" --non-exclusive & keyboard_pid=$!
+            keyboard_layout=normal
             ;;
         dialer)
+            if [[ "$keyboard_layout" == dialer && -n "$keyboard_pid" ]] && kill -0 "$keyboard_pid" 2>/dev/null; then
+                continue
+            fi
             stop_keyboard
-            "$keyboard" -l dialer & keyboard_pid=$!
+            "$keyboard" --non-exclusive -l dialer & keyboard_pid=$!
+            keyboard_layout=dialer
             ;;
         hide) stop_keyboard ;;
     esac

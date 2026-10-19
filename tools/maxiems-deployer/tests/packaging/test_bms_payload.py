@@ -3,6 +3,7 @@ import io
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,27 @@ spec.loader.exec_module(payload)
 
 
 class BmsPayloadTest(unittest.TestCase):
+    def test_release_text_is_derived_from_verified_manifest_on_build_and_target(self):
+        builder = (ROOT / 'build-bms-release.sh').read_text()
+        target = (ROOT / 'remote/usr/local/libexec/maxiems-deploy-ops').read_text()
+        expression = r'"releaseId=\(.releaseId)\nbuildTimestampUtc=\(.buildTimestampUtc)\ngitRevision=\(.gitRevision)\npayloadHash=\(.payloadHash)"'
+        self.assertIn(expression, builder)
+        self.assertIn(expression, target)
+        self.assertIn('"$output/release.txt"', builder)
+        self.assertLess(target.index("'payload file inventory mismatch'"),
+                        target.index('"$staging/release.txt"'))
+        self.assertIn("/usr/bin/printf 'release.txt\\n' >> \"$expected_files\"", target)
+        self.assertIn("'installed release identity mismatch'", target)
+
+        manifest = {'releaseId': '20261013010000-123456789abc',
+                    'buildTimestampUtc': '2026-10-13T01:00:00Z',
+                    'gitRevision': 'a' * 40, 'payloadHash': '1' * 64}
+        actual = subprocess.check_output(['jq', '-r', expression], input=json.dumps(manifest), text=True)
+        self.assertEqual('releaseId=20261013010000-123456789abc\n'
+                         'buildTimestampUtc=2026-10-13T01:00:00Z\n'
+                         f'gitRevision={"a" * 40}\n'
+                         f'payloadHash={"1" * 64}\n', actual)
+
     def test_release_checksums_expose_canonical_payload_hash(self):
         script = (ROOT / 'build-bms-release.sh').read_text()
 
@@ -63,6 +85,50 @@ class BmsPayloadTest(unittest.TestCase):
                     self.assertEqual(item['length'], len(content))
                     self.assertEqual(item['sha256'], hashlib.sha256(content).hexdigest())
                 self.assertIn('remote/usr/local/libexec/maxiems-bms-setup', archive.namelist())
+                self.assertIn('remote/etc/systemd/system/maxiems-kiosk.service', archive.namelist())
+                self.assertNotIn('remote/etc/systemd/user/maxiems-kiosk.service', archive.namelist())
+                self.assertIn('remote/etc/sway/maxiems-kiosk.conf', archive.namelist())
+                self.assertNotIn('remote/etc/xdg/autostart/maxiems-kiosk.desktop', archive.namelist())
+                self.assertIn('remote/usr/local/libexec/maxiems-kiosk-supervisor', archive.namelist())
+                self.assertIn('remote/usr/local/libexec/maxiems-kiosk-ops', archive.namelist())
+                self.assertIn('helpers/maxiems-keyboard-controller', archive.namelist())
+                self.assertIn('helpers/wvkbd-mobintl', archive.namelist())
+                self.assertIn('remote/usr/local/sbin/maxiems-keyboard', archive.namelist())
+                self.assertIn(
+                    'remote/etc/systemd/system/getty@tty1.service.d/'
+                    '90-maxiems-kiosk-autologin.conf', archive.namelist())
+                self.assertIn('remote/etc/profile.d/90-maxiems-kiosk-sway.sh', archive.namelist())
+                kiosk_unit = archive.read('remote/etc/systemd/system/maxiems-kiosk.service').decode()
+                self.assertIn('User=admin\nGroup=admin', kiosk_unit)
+                self.assertIn('[Install]\nWantedBy=multi-user.target', kiosk_unit)
+                kiosk_ops = archive.read('remote/usr/local/libexec/maxiems-kiosk-ops').decode()
+                self.assertIn('/usr/bin/systemctl enable maxiems-kiosk.service', kiosk_ops)
+                self.assertIn("legacy_user_unit='/etc/systemd/user/maxiems-kiosk.service'", kiosk_ops)
+                self.assertIn('/usr/bin/systemctl enable getty@tty1.service', kiosk_ops)
+                self.assertIn('/var/lib/maxiems/kbd', kiosk_ops)
+                sway = archive.read('remote/etc/sway/maxiems-kiosk.conf').decode()
+                self.assertIn('output DSI-1 transform 270', sway)
+                self.assertNotIn('output DSI-1 transform 90', sway)
+                self.assertIn('calibration_matrix 0 -1 1 1 0 0', sway)
+                keyboard_controller = archive.read(
+                    'helpers/maxiems-keyboard-controller').decode()
+                self.assertIn('"$keyboard" --non-exclusive & keyboard_pid=$!',
+                              keyboard_controller)
+                self.assertIn('"$keyboard" --non-exclusive -l dialer & keyboard_pid=$!',
+                              keyboard_controller)
+                keyboard = archive.read('helpers/wvkbd-mobintl')
+                self.assertEqual(b'\x7fELF\x02\x01', keyboard[:6])
+                self.assertEqual(183, int.from_bytes(keyboard[18:20], 'little'))
+                getty = archive.read(
+                    'remote/etc/systemd/system/getty@tty1.service.d/'
+                    '90-maxiems-kiosk-autologin.conf').decode()
+                self.assertIn('--autologin admin', getty)
+                profile = archive.read('remote/etc/profile.d/90-maxiems-kiosk-sway.sh').decode()
+                self.assertIn('SSH_CONNECTION', profile)
+                self.assertIn('/dev/tty1', profile)
+                self.assertIn('exec /usr/bin/sway', profile)
+                self.assertNotIn(
+                    'remote/usr/local/libexec/maxiems-kiosk-session-start', archive.namelist())
                 managed = json.loads(archive.read('components/managed-components.v1.json'))
                 self.assertTrue(all(component['updateOnly'] for component in managed['components']))
                 self.assertEqual({'ctrlApiRest0', 'ctrlApiWebsocket0'},
@@ -71,6 +137,9 @@ class BmsPayloadTest(unittest.TestCase):
                 self.assertIn('maxiems-deploy-helper bms-setup real', sudoers)
                 self.assertIn('maxiems-deploy-helper bms-setup demo', sudoers)
                 self.assertNotIn('maxiems-deploy-helper bms-setup *', sudoers)
+                self.assertIn('/usr/local/sbin/maxiems-keyboard normal', sudoers)
+                self.assertIn('/usr/local/sbin/maxiems-keyboard dialer', sudoers)
+                self.assertIn('/usr/local/sbin/maxiems-keyboard hide', sudoers)
                 deploy_helper = archive.read('remote/usr/local/libexec/maxiems-deploy-helper').decode()
                 self.assertIn("$2\" == 'real' || \"$2\" == 'demo'", deploy_helper)
                 deploy_ops = archive.read('remote/usr/local/libexec/maxiems-deploy-ops').decode()

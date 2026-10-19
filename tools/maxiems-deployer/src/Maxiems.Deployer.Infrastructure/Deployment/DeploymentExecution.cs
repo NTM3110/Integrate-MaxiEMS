@@ -10,6 +10,12 @@ public enum DeploymentTargetProfile
     Demo,
 }
 
+public enum DeploymentKioskMode
+{
+    Managed,
+    Preserve,
+}
+
 public sealed record DeploymentExecutionRequest(
     HostEndpoint Endpoint,
     string BootstrapUsername,
@@ -46,6 +52,14 @@ public sealed record DeploymentExecutionRequest(
     {
         get; init;
     } = DeploymentTargetProfile.Real;
+    public DeploymentKioskMode KioskMode
+    {
+        get; init;
+    } = DeploymentKioskMode.Managed;
+    public bool LocalBootstrap
+    {
+        get; init;
+    }
 }
 
 public sealed record DeploymentExecutionEvent(

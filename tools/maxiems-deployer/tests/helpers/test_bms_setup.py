@@ -56,10 +56,11 @@ class SetupTests(unittest.TestCase):
         module.setup('real')
         files = list(module.CONFIG.rglob('*.config'))
         self.assertEqual(11, len(files))
-        bridges = [module.config_path(f'Bridge.Modbus.Serial.maxiems-modbus{i}').read_text() for i in range(3)]
+        bridges = [module.config_path(f'Bridge.BmsModbus.Serial.maxiems-modbus{i}').read_text() for i in range(3)]
         self.assertIn('portName="/dev/ttyS1"', bridges[0])
         self.assertIn('portName="/dev/ttyS7"', bridges[1])
         self.assertIn('portName="/dev/ttyS9"', bridges[2])
+        self.assertTrue(all('responseTimeoutMs=I"100"' in bridge for bridge in bridges))
         self.assertIn('bootstrapAdminPassword="admin"', module.config_path(module.AUTH_PID).read_text())
         self.assertEqual(0o600, (module.STATE / 'database.json').stat().st_mode & 0o777)
         self.assertFalse(any('CREATE TABLE' in q for q in self.statements))
@@ -102,11 +103,47 @@ class SetupTests(unittest.TestCase):
     def test_demo_uses_same_ids_with_demo_pty_paths_and_profile_is_locked(self):
         module.setup('demo')
         for index, port in enumerate(['/dev/ttyBMS1', '/dev/ttyBMS3', '/dev/ttyBMS5']):
-            text = module.config_path(f'Bridge.Modbus.Serial.maxiems-modbus{index}').read_text()
+            text = module.config_path(f'Bridge.BmsModbus.Serial.maxiems-modbus{index}').read_text()
             self.assertIn(f'id="modbus{index}"', text)
             self.assertIn(f'portName="{port}"', text)
         with self.assertRaisesRegex(RuntimeError, 'differs'):
             module.setup('real')
+
+    def test_update_migrates_managed_bridge_without_losing_serial_settings(self):
+        module.setup('real')
+        new = module.config_path('Bridge.BmsModbus.Serial.maxiems-modbus0')
+        old = module.config_path('Bridge.Modbus.Serial.maxiems-modbus0')
+        old.parent.mkdir(parents=True, exist_ok=True)
+        legacy = new.read_text().replace('Bridge.BmsModbus.Serial', 'Bridge.Modbus.Serial')
+        legacy = legacy.replace('baudRate=I"9600"', 'baudRate=I"19200"')
+        legacy = legacy.replace('responseTimeoutMs=I"100"\n', '')
+        old.write_text(legacy)
+        new.unlink()
+
+        module.setup('real')
+
+        migrated = new.read_text()
+        self.assertFalse(old.exists())
+        self.assertIn('id="modbus0"', migrated)
+        self.assertIn('portName="/dev/ttyS1"', migrated)
+        self.assertIn('baudRate=I"19200"', migrated)
+        self.assertIn('responseTimeoutMs=I"100"', migrated)
+        module.setup('real')
+        self.assertEqual(migrated, new.read_text())
+
+    def test_migration_rejects_duplicate_factory_configs_for_one_port(self):
+        module.setup('real')
+        new = module.config_path('Bridge.BmsModbus.Serial.maxiems-modbus0')
+        old = module.config_path('Bridge.Modbus.Serial.maxiems-modbus0')
+        old.parent.mkdir(parents=True, exist_ok=True)
+        original = new.read_text()
+        old.write_text(original.replace('Bridge.BmsModbus.Serial', 'Bridge.Modbus.Serial'))
+
+        with self.assertRaisesRegex(RuntimeError, 'Duplicate managed serial bridge modbus0'):
+            module.setup('real')
+
+        self.assertEqual(original, new.read_text())
+        self.assertTrue(old.exists())
 
     def test_legacy_managed_install_without_bridges_seeds_selected_profile(self):
         module.STATE.mkdir()
@@ -117,7 +154,7 @@ class SetupTests(unittest.TestCase):
         module.setup('demo')
 
         for index, port in enumerate(['/dev/ttyBMS1', '/dev/ttyBMS3', '/dev/ttyBMS5']):
-            text = module.config_path(f'Bridge.Modbus.Serial.maxiems-modbus{index}').read_text()
+            text = module.config_path(f'Bridge.BmsModbus.Serial.maxiems-modbus{index}').read_text()
             self.assertIn(f'portName="{port}"', text)
         self.assertEqual('demo\n', (module.STATE / module.PROFILE_MARKER).read_text())
 

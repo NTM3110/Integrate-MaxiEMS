@@ -44,6 +44,28 @@ public class DischargeStageMonitorTest {
 	}
 
 	@Test
+	public void demoIntegratesCompletedBmsBatchesWithoutCountingLongWorkerGaps() {
+		var configuration = CalibrationTestFixtures.initial(DischargeCurrentDirection.POSITIVE);
+		var monitor = new DischargeStageMonitor();
+		long firstTime = CalibrationTestFixtures.BASE_TIME;
+		var first = monitor.evaluate(configuration, CalibrationStageType.DISCHARGE,
+				CalibrationTestFixtures.measurement(configuration, 1, firstTime, 20.0, 25.0, 2.0, 2.0, 2.0),
+				null, firstTime, CalibrationDemoTimeScale.DEMO_MINUTE_PER_SECOND);
+		var nextBatchTime = firstTime + 12_000L;
+		var nextBatch = monitor.evaluate(configuration, CalibrationStageType.DISCHARGE,
+				CalibrationTestFixtures.measurement(configuration, 2, nextBatchTime, 20.0, 25.0, 2.0, 2.0, 2.0),
+				first.checkpoint(), nextBatchTime, CalibrationDemoTimeScale.DEMO_MINUTE_PER_SECOND);
+		assertEquals(4.0, nextBatch.checkpoint().rawUsedAh(), 0.000001);
+
+		long afterWorkerGap = nextBatchTime + 31_000L;
+		var anchor = monitor.evaluate(configuration, CalibrationStageType.DISCHARGE,
+				CalibrationTestFixtures.measurement(configuration, 3, afterWorkerGap, 20.0, 25.0, 2.0, 2.0, 2.0),
+				nextBatch.checkpoint(), afterWorkerGap, CalibrationDemoTimeScale.DEMO_MINUTE_PER_SECOND);
+		assertEquals(4.0, anchor.checkpoint().rawUsedAh(), 0.000001);
+		assertEquals(0.0, anchor.checkpoint().lastDeltaAh(), 0.0);
+	}
+
+	@Test
 	public void wrongCurrentDirectionAllowsConfiguredMaximumThenBlocksAndCorrectDirectionResetsCounter() {
 		var configuration = CalibrationTestFixtures.initial(DischargeCurrentDirection.POSITIVE);
 		var monitor = new DischargeStageMonitor();

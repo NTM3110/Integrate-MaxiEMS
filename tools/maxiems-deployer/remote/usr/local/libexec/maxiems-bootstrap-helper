@@ -60,12 +60,14 @@ fi
 	"$SOURCE/maxiems-prerequisite-ops" /usr/local/libexec/maxiems-prerequisite-ops
 /usr/bin/install --owner=root --group=root --mode=0700 \
 	"$SOURCE/maxiems-runtime-config-ops" /usr/local/libexec/maxiems-runtime-config-ops
+/usr/bin/install --owner=root --group=root --mode=0700 \
+	"$SOURCE/maxiems-kiosk-ops" /usr/local/libexec/maxiems-kiosk-ops
 /usr/bin/install --owner=root --group=root --mode=0755 \
 	"$SOURCE/maxiems-edge-healthcheck" /usr/local/libexec/maxiems-edge-healthcheck
 /usr/bin/install --owner=root --group=root --mode=0700 \
 	"$SOURCE/maxiems-network-ops" /usr/local/libexec/maxiems-network-ops
 /usr/bin/install --owner=root --group=root --mode=0700 "$SOURCE/maxiems-bms-setup" /usr/local/libexec/maxiems-bms-setup
-for helper in maxiems-network-helper maxiems-time-helper maxiems-system-helper maxiems-wifi maxiems-netcfg; do
+for helper in maxiems-network-helper maxiems-time-helper maxiems-system-helper maxiems-wifi maxiems-netcfg maxiems-gpio maxiems-keyboard; do
  /usr/bin/install --owner=root --group=root --mode=0755 "$SOURCE/$helper" "/usr/local/sbin/$helper"
 done
 /usr/bin/rm -f -- \

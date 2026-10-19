@@ -6,6 +6,12 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -13,6 +19,9 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge.CompletedBatch;
+import io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge.Outcome;
 
 import org.junit.Test;
 
@@ -22,8 +31,42 @@ import io.openems.edge.bms.service.calculation.model.BmsCalculationSnapshot.Esti
 import io.openems.edge.bms.service.calibration.model.InitialBaselineReferenceDataset;
 import io.openems.edge.bms.service.monitoring.model.BmsCurrentDirectionMapping;
 import io.openems.edge.common.channel.value.Value;
+import io.openems.edge.common.component.ComponentManager;
 
 public class ControllerBmsHuasuTcBulkCreatorSnapshotTest {
+	@Test
+	public void allFailedBatchIsAcknowledgedOnceAfterCalculation() throws Exception {
+		var controller = spy(new ControllerBmsHuasuTcBulkCreatorImpl());
+		var config = mock(Config.class);
+		when(config.stringId()).thenReturn("1");
+		when(config.modbusId()).thenReturn("modbus0");
+		var manager = mock(ComponentManager.class);
+		var bridge = mock(io.openems.edge.bms.bridge.modbus.api.BmsModbusBatchBridge.class);
+		var batch = new CompletedBatch("generation", 7, 1000, 2000,
+				Map.of("ta1", Outcome.FAILED, "tc", Outcome.FAILED));
+		when(manager.getComponent("modbus0")).thenReturn(bridge);
+		when(bridge.getCompletedBatch()).thenReturn(batch);
+		when(bridge.acknowledgeProcessed("generation", 7)).thenReturn(true);
+		setField(controller, "config", config);
+		setField(controller, "componentManager", manager);
+		doNothing().when(controller).calculateNow(batch);
+
+		controller.run();
+		controller.run();
+
+		verify(controller, times(1)).calculateNow(batch);
+		verify(bridge, times(1)).acknowledgeProcessed("generation", 7);
+	}
+	@Test
+	public void onlySuccessfulSourcesAreFreshInACompletedBatch() {
+		var batch = new CompletedBatch("generation", 1, 1000, 2000,
+				Map.of("ta1", Outcome.SUCCESS, "ta2", Outcome.FAILED, "tc", Outcome.SKIPPED));
+		assertTrue(ControllerBmsHuasuTcBulkCreatorImpl.sourceFreshInBatch(batch, "ta1", true));
+		assertFalse(ControllerBmsHuasuTcBulkCreatorImpl.sourceFreshInBatch(batch, "ta2", false));
+		assertFalse(ControllerBmsHuasuTcBulkCreatorImpl.sourceFreshInBatch(batch, "tc", false));
+		assertFalse(ControllerBmsHuasuTcBulkCreatorImpl.sourceFreshInBatch(batch, "missing", false));
+		assertTrue(ControllerBmsHuasuTcBulkCreatorImpl.sourceFreshInBatch(null, "ta1", false));
+	}
 
 	@Test
 	public void scheduledCalculationUsesConfiguredTwoSecondSnapshotInterval() {
@@ -235,7 +278,12 @@ public class ControllerBmsHuasuTcBulkCreatorSnapshotTest {
 	}
 
 	private static void setField(Object target, String name, Object value) throws ReflectiveOperationException {
-		var field = target.getClass().getDeclaredField(name);
+		var type = target.getClass();
+		while (type != null && !ControllerBmsHuasuTcBulkCreatorImpl.class.equals(type)) {
+			type = type.getSuperclass();
+		}
+		if (type == null) throw new NoSuchFieldException(name);
+		var field = type.getDeclaredField(name);
 		field.setAccessible(true);
 		field.set(target, value);
 	}

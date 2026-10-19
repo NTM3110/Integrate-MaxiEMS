@@ -20,6 +20,8 @@ public sealed class CliTests
         Assert.IsTrue(Path.IsPathFullyQualified(options.Payload));
         Assert.IsNull(options.Manifest);
         Assert.AreEqual(DeploymentTargetProfile.Real, options.TargetProfile);
+        Assert.AreEqual(DeploymentKioskMode.Managed, options.KioskMode);
+        Assert.IsFalse(options.LocalBootstrap);
         Assert.IsFalse(options.KeepFailedReleaseForInspection);
         Assert.AreEqual(22, CliOptions.Parse(Valid).Endpoint.Port);
     }
@@ -43,6 +45,36 @@ public sealed class CliTests
             CliOptions.Parse([.. Valid, "--deploy-option", "staging"]));
         Assert.ThrowsExactly<ArgumentException>(() =>
             CliOptions.Parse([.. Valid, "--deploy-option", "real", "-deploy-option", "demo"]));
+    }
+
+    [TestMethod]
+    public void ParsesKioskPreserveWithoutChangingDeploymentProfile()
+    {
+        var options = CliOptions.Parse([.. Valid, "--deploy-option", "demo", "--kiosk", "preserve"]);
+        Assert.AreEqual(DeploymentTargetProfile.Demo, options.TargetProfile);
+        Assert.AreEqual(DeploymentKioskMode.Preserve, options.KioskMode);
+        Assert.ThrowsExactly<ArgumentException>(() => CliOptions.Parse([.. Valid, "--kiosk", "other"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CliOptions.Parse([.. Valid, "--kiosk", "managed", "--kiosk", "preserve"]));
+    }
+
+    [TestMethod]
+    public void LocalBootstrapRequiresLoopbackIpLiteral()
+    {
+        var options = CliOptions.Parse([
+            "deploy", "--host", "127.0.0.1", "--user", "temporary",
+            "--payload", "payload.zip", "--identity", "temporary-key", "--local-bootstrap"]);
+        Assert.IsTrue(options.LocalBootstrap);
+        Assert.IsTrue(CliOptions.Parse([
+            "deploy", "--host", "::1", "--user", "temporary",
+            "--payload", "payload.zip", "--identity", "temporary-key", "--local-bootstrap"]).LocalBootstrap);
+        Assert.ThrowsExactly<ArgumentException>(() => CliOptions.Parse([.. Valid, "--local-bootstrap"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CliOptions.Parse([
+            "deploy", "--host", "localhost", "--user", "temporary",
+            "--payload", "payload.zip", "--identity", "temporary-key", "--local-bootstrap"]));
+        Assert.ThrowsExactly<ArgumentException>(() => CliOptions.Parse([
+            "deploy", "--host", "127.0.0.1", "--user", "temporary",
+            "--payload", "payload.zip", "--identity", "temporary-key",
+            "--local-bootstrap", "--local-bootstrap"]));
     }
 
     [TestMethod]

@@ -6,13 +6,15 @@
 | --- | --- | --- |
 | `io.openems.edge.shared.postgresql` (`PostgresConnectionFactory`) | `io.openems.edge.bms.service` (`BmsDatabaseImpl`) | BMS PID lịch sử tạo pool cho DB thử nghiệm, chạy migration rồi báo available |
 | `io.openems.edge.bms.service` (`BmsDatabase`, `PlatformAuthenticationService`, `StringManagementOperations`, các model) | `io.openems.edge.bms.api` | API JSON-RPC bind đúng service; đăng nhập và `bms.strings.list` hoạt động |
-| `io.openems.edge.bridge.modbus` (`Bridge.Modbus.Serial`) | TA/TC drivers và BMS serial service | `modbus0` dùng PTY demo; `bms.tools.serial.list` thấy bridge |
+| `io.openems.edge.bms.bridge.modbus` (`Bridge.BmsModbus.Serial`) | TA/TC drivers và BMS serial service | `modbus0` dùng PTY demo; `bms.tools.serial.list` thấy bridge |
 | `io.openems.edge.bms.huasu.ta` và `.tc` | `io.openems.edge.controller.bms` | Sau `bms.strings.create`, 110 TA unit 1–110 và TC unit 206 bind `modbus0` |
 | `io.openems.edge.bms.service` (`BmsStringLifecycle`) | `io.openems.edge.bms.api` (`StringJsonApi`) | Lệnh Create sinh TA, TC, calculator, monitoring qua ConfigAdmin; trước Create không có các instance đó |
 | `io.openems.edge.scheduler.allalphabetically` | calculator, monitoring và WebSocket controller | Scheduler lấy cả controller mới được bật sau khi Create; calculator chạy trước monitoring theo ID |
 | `io.openems.edge.controller.api.websocket` | FE `maxicom-frontend` | WebSocket `127.0.0.1:8085`, tách cổng HTTP `8081` |
 
 `BMSApp.bndrun` liệt kê các provider trên. `resolve.BMSApp` kiểm tra import/export OSGi; nó không chứng minh DS `@Reference` đã bind, nên cần đọc log/runtime và thử API.
+
+Sau khi sửa bundle BMS batch, build module rồi chạy `resolve.BMSApp` và `export.BMSApp --rerun` ở hai lượt Gradle riêng. Kiểm tra JAR nhúng có `BridgeBmsModbusSerialImpl.class` và `OSGI-INF/Bridge.BmsModbus.Serial.xml`; chỉ thấy tên bundle hoặc package `.api` là chưa đủ. Với factory PID `Bridge.BmsModbus.Serial`, tên file cấu hình dưới `felix.cm.dir` phải khớp suffix của `service.pid` (ví dụ `Bridge/BmsModbus/Serial/bms.config` cho `Bridge.BmsModbus.Serial.bms`). Luôn có file PostgreSQL trỏ rõ vào database demo/disposable trước khi khởi động; nếu thiếu, `BmsDatabaseImpl` có thể dùng database mặc định `maxiems`.
 
 Khi khởi động, `AppValidateWorker` có thể báo một lần `NullPointerException` tại `AppConfigValidator.validate` nếu danh sách app thay đổi giữa lúc tạo bản đồ cấu hình và lúc kiểm tra. Trong lần thử với 11 cấu hình, lỗi chỉ xuất hiện một lần ngay sau startup; auth và `bms.strings.list` vẫn hoạt động, không lặp lại trong phút theo dõi. Nếu lỗi lặp lại, ghi thành blocker và kiểm tra cấu hình `Core.AppManager` cùng các app đã cài.
 
